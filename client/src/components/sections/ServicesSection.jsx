@@ -1,6 +1,8 @@
 import careerDiscovery from '../../assets/images/career-discovery.png'
 import smartHiring from '../../assets/images/smart-hiring.png'
 import marketplace from '../../assets/images/marketplace.png'
+import { motion } from 'framer-motion'
+import { useState } from 'react'
 
 const services = [
   {
@@ -34,22 +36,23 @@ const services = [
 ]
 
 function ServiceCard({ service }) {
+  const [loaded, setLoaded] = useState(false)
   return (
-    <article className={`service-card ${service.tone} ${service.reversed ? 'reversed' : ''}`}>
+    <motion.article initial="hidden" whileInView="visible" viewport={{ once: true, amount: .12, margin: '0px 0px -8% 0px' }} className={`service-card ${service.tone} ${service.reversed ? 'reversed' : ''}`}>
       <div className="service-card-inner">
-        <div className="service-image-wrap">
-          <img src={service.image} alt={service.imageAlt} />
-        </div>
-        <div className="service-copy">
+        <motion.div className="service-image-wrap" variants={{ hidden: { opacity: 0, y: 42 }, visible: { opacity: 1, y: 0, transition: { duration: .9, ease: [0.16, 1, 0.3, 1] } } }}>
+          <img className={loaded ? 'loaded' : ''} loading="lazy" src={service.image} alt={service.imageAlt} onLoad={() => setLoaded(true)} />
+        </motion.div>
+        <motion.div className="service-copy" variants={{ hidden: { opacity: 0, y: 32 }, visible: { opacity: 1, y: 0, transition: { duration: .82, delay: .16, ease: [0.16, 1, 0.3, 1] } } }}>
           <div>
             <p className="service-eyebrow">{service.eyebrow}</p>
             <h3>{service.title}</h3>
             <p className="service-description">{service.description}</p>
           </div>
           <a className="service-action" href="#signup">{service.action}</a>
-        </div>
+        </motion.div>
       </div>
-    </article>
+    </motion.article>
   )
 }
 
