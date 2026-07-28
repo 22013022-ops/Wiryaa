@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import logo from '../../assets/icons/wiryaa-logo.png'
 
-const links = [['home', 'Home'], ['services', 'Services'], ['about', 'About us'], ['contact', 'Contact']]
+const links = [
+  ['/', 'Home', false],
+  ['/#services', 'Services', true],
+  ['/about', 'About us', false],
+  ['/#contact', 'Contact', true],
+]
 
 function Header() {
   const [scrolled, setScrolled] = useState(false)
-  const [active, setActive] = useState('home')
+  const [active, setActive] = useState('/')
 
   useEffect(() => {
     const onScroll = () => {
       setScrolled(window.scrollY > 12)
-      const current = [...links].reverse().find(([id]) => document.getElementById(id)?.getBoundingClientRect().top <= 180)
+      const current = [...links].reverse().find(([href, , isAnchor]) => isAnchor ? document.getElementById(href.replace('#', ''))?.getBoundingClientRect().top <= 180 : false)
       if (current) setActive(current[0])
     }
     onScroll(); window.addEventListener('scroll', onScroll, { passive: true })
@@ -20,12 +26,12 @@ function Header() {
   return (
     <header className={`site-header ${scrolled ? 'is-scrolled' : ''}`}>
       <nav className="navbar" aria-label="Primary navigation">
-        <a className="brand" href="#home" aria-label="Wiryaa home">
+        <a className="brand" href="/" aria-label="Wiryaa home">
           <img src={logo} alt="" />
           <span>Wiryaa</span>
         </a>
         <div className="nav-links">
-          {links.map(([id, label]) => <a key={id} className={active === id ? 'active' : ''} href={`#${id}`}>{label}</a>)}
+          {links.map(([href, label, isAnchor]) => isAnchor ? <a key={href} className={active === href ? 'active' : ''} href={href}>{label}</a> : <Link key={href} className={active === href ? 'active' : ''} to={href}>{label}</Link>)}
           <a className="signup-link" href="#signup">Sign up</a>
         </div>
       </nav>

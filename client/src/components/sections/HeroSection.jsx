@@ -11,7 +11,7 @@ function HeroSection() {
         <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .6, delay: .18 }}>A platform that empowers women to discover careers, connect with employers, and grow their businesses—all in one place.</motion.p>
         <div className="hero-actions">
           <a className="hero-action hero-action-outline" href="#services">Explore Services</a>
-          <a className="hero-action hero-action-glass" href="#about">Learn More</a>
+          <a className="hero-action hero-action-glass" href="/about">Learn More</a>
         </div>
       </motion.div>
       <a className="scroll-indicator" href="#services" aria-label="Scroll to services"><span /></a>
