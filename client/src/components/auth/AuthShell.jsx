@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { FiArrowLeft, FiCheckCircle, FiShield } from 'react-icons/fi'
-import logo from '../../assets/icons/wiryaa-logo.png'
+import logo from '../../assets/icons/wiryaa-monogram.png'
 
 function AuthShell({ children, mode }) {
   const isSignup = mode === 'signup'

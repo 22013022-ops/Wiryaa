@@ -13,8 +13,10 @@
     "@tailwindcss/vite": "^4.3.3",
     "axios": "^1.18.1",
     "framer-motion": "^12.42.2",
+    "i18next": "^26.4.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-i18next": "^17.0.12",
     "react-icons": "^5.7.0",
     "react-router-dom": "^7.18.1",
     "tailwindcss": "^4.3.3"
