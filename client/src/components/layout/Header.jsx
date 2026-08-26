@@ -32,7 +32,7 @@ function Header() {
         </a>
         <div className="nav-links">
           {links.map(([href, label, isAnchor]) => isAnchor ? <a key={href} className={active === href ? 'active' : ''} href={href}>{label}</a> : <Link key={href} className={active === href ? 'active' : ''} to={href}>{label}</Link>)}
-          <a className="signup-link" href="#signup">Sign up</a>
+          <Link className="signup-link" to="/signup">Sign up</Link>
         </div>
       </nav>
     </header>

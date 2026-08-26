@@ -3,6 +3,7 @@ import smartHiring from '../../assets/images/smart-hiring.png'
 import marketplace from '../../assets/images/marketplace.png'
 import { motion } from 'framer-motion'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 const services = [
   {
@@ -18,7 +19,7 @@ const services = [
     eyebrow: 'Smart Hiring',
     title: 'Hire Talents',
     description: "Stop sifting through hundreds of CVs. Wiryaa's AI ranks women candidates by fit, culture-match, and skill depth — so you connect with the right person faster, with less bias.",
-    action: 'Post a Role',
+    action: 'Hire Talents',
     image: smartHiring,
     imageAlt: 'Women collaborating in an office',
     tone: 'lilac',
@@ -49,7 +50,11 @@ function ServiceCard({ service }) {
             <h3>{service.title}</h3>
             <p className="service-description">{service.description}</p>
           </div>
-          <a className="service-action" href="#signup">{service.action}</a>
+          {service.title === 'Find Jobs' || service.title === 'Hire Talents' ? (
+            <Link className="service-action" to="/signup">{service.action}</Link>
+          ) : (
+            <a className="service-action" href="#signup">{service.action}</a>
+          )}
         </motion.div>
       </div>
     </motion.article>
