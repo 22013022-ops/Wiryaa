@@ -7,7 +7,7 @@ const fileFilter = (req, file, callback) => {
   return callback(new AppError('Only image, video, PDF, DOC, and DOCX files can be uploaded.', 400))
 }
 
-const upload = multer({ storage: multer.memoryStorage(), fileFilter, limits: { fileSize: 10 * 1024 * 1024, files: 3 } })
-const uploadFindJobsFiles = upload.fields([{ name: 'profilePicture', maxCount: 1 }, { name: 'resume', maxCount: 1 }, { name: 'workSamples', maxCount: 1 }])
+const upload = multer({ storage: multer.memoryStorage(), fileFilter, limits: { fileSize: 10 * 1024 * 1024, files: 8 } })
+const uploadFindJobsFiles = upload.fields([{ name: 'profilePicture', maxCount: 1 }, { name: 'resume', maxCount: 1 }, { name: 'workSamples', maxCount: 1 }, { name: 'certificationAttachments', maxCount: 5 }])
 
 module.exports = { uploadFindJobsFiles }

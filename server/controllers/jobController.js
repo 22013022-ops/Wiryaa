@@ -6,6 +6,12 @@ async function getFindJobsAccess(req, res) {
   res.status(200).json({ status: 'success', data: { message: 'Find Jobs access granted.' } })
 }
 
+async function getFindJobsProfile(req, res) {
+  const profile = await FindJobsProfile.findOne({ user: req.user.id }).lean()
+  if (!profile) throw new AppError('Create your profile before viewing it.', 404)
+  res.status(200).json({ status: 'success', data: { profile } })
+}
+
 async function saveFindJobsProfile(req, res) {
   const requiredFields = ['name', 'phone', 'age']
   const missingField = requiredFields.find((field) => !String(req.body[field] || '').trim())
@@ -22,4 +28,4 @@ async function saveFindJobsProfile(req, res) {
   res.status(200).json({ status: 'success', data: { profile } })
 }
 
-module.exports = { getFindJobsAccess, saveFindJobsProfile }
+module.exports = { getFindJobsAccess, getFindJobsProfile, saveFindJobsProfile }

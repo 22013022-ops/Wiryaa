@@ -26,6 +26,7 @@ const findJobsProfileSchema = new mongoose.Schema({
   profilePicture: assetSchema,
   resume: assetSchema,
   workSamples: assetSchema,
+  certificationAttachments: [assetSchema],
 }, { collection: 'find_jobs', timestamps: true })
 
 module.exports = mongoose.model('FindJobsProfile', findJobsProfileSchema)
