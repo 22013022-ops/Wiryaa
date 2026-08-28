@@ -21,7 +21,7 @@ function uploadFile(file, folder = 'wiryaa') {
 
 async function uploadProfileFiles(files = {}) {
   const uploaded = await Promise.all(Object.entries(files).map(async ([field, entries]) => {
-    if (field === 'certificationAttachments') return [field, await Promise.all(entries.map((file) => uploadFile(file, 'wiryaa/find-jobs')))]
+    if (field === 'certificationAttachments' || field === 'workSamples') return [field, await Promise.all(entries.map((file) => uploadFile(file, 'wiryaa/find-jobs')))]
     return [field, await uploadFile(entries[0], 'wiryaa/find-jobs')]
   }))
   return Object.fromEntries(uploaded)

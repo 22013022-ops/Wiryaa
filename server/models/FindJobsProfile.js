@@ -25,7 +25,7 @@ const findJobsProfileSchema = new mongoose.Schema({
   preferences: { type: String, trim: true, maxlength: 3000 },
   profilePicture: assetSchema,
   resume: assetSchema,
-  workSamples: assetSchema,
+  workSamples: [assetSchema],
   certificationAttachments: [assetSchema],
 }, { collection: 'find_jobs', timestamps: true })
 
