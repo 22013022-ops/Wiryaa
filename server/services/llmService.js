@@ -263,6 +263,8 @@ async function structureText(text, outputType) {
     if (!response.ok) throw new AppError(body?.error?.message || 'The LLM request failed.', 502)
     const plainText = body?.choices?.[0]?.message?.content
     if (typeof plainText !== 'string') throw new AppError('The LLM returned no text content.', 502)
+    console.log('LLM outputType:', outputType)
+    console.log('LLM plainText:', plainText)
     return parseStructuredOutput(plainText, outputType)
   } catch (error) {
     if (error.isOperational) throw error

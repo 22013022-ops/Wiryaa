@@ -20,8 +20,19 @@ async function saveFindJobsProfile(req, res) {
 
   const fields = ['name', 'email', 'phone', 'age', 'state', 'city', 'pincode', 'qualification', 'portfolio', 'skills', 'previousJobs', 'roles', 'skillsApplied', 'certifications', 'preferences']
   const profileData = Object.fromEntries(fields.filter((field) => req.body[field] !== undefined).map((field) => [field, req.body[field]]))
-  if (req.body.skills !== undefined) profileData.skillsStructured = await structureText(req.body.skills, 'skills')
-  if (req.body.preferences !== undefined) profileData.constraintsStructured = await structureText(req.body.preferences, 'constraints')
+  const existingProfile = await FindJobsProfile.findOne({ user: req.user.id }).select('skills preferences').lean()
+  const llmFields = [
+    { originalField: 'skills', structuredField: 'skillsStructured', outputType: 'skills' },
+    { originalField: 'preferences', structuredField: 'constraintsStructured', outputType: 'constraints' },
+  ]
+
+  await Promise.all(llmFields.map(async ({ originalField, structuredField, outputType }) => {
+    if (req.body[originalField] === undefined) return
+    const newOriginalInput = String(req.body[originalField] || '')
+    const previousOriginalInput = String(existingProfile?.[originalField] || '')
+    if (newOriginalInput === previousOriginalInput) return
+    profileData[structuredField] = await structureText(newOriginalInput, outputType)
+  }))
   const assets = await uploadProfileFiles(req.files)
   const profile = await FindJobsProfile.findOneAndUpdate(
     { user: req.user.id },

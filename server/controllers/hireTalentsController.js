@@ -15,8 +15,19 @@ async function saveJobPost(req, res) {
   const missingField = requiredFields.find((field) => !String(req.body[field] || '').trim())
   if (missingField) throw new AppError(`${missingField} is required.`, 400)
   const jobPostData = Object.fromEntries(fields.filter((field) => req.body[field] !== undefined).map((field) => [field, req.body[field]]))
-  if (req.body.description !== undefined) jobPostData.descriptionStructured = await structureText(req.body.description, 'description')
-  if (req.body.benefits !== undefined) jobPostData.benefitsStructured = await structureText(req.body.benefits, 'benefits')
+  const existingJobPost = await HireTalentsJobPost.findOne({ user: req.user.id }).select('description benefits').lean()
+  const llmFields = [
+    { originalField: 'description', structuredField: 'descriptionStructured', outputType: 'description' },
+    { originalField: 'benefits', structuredField: 'benefitsStructured', outputType: 'benefits' },
+  ]
+
+  await Promise.all(llmFields.map(async ({ originalField, structuredField, outputType }) => {
+    if (req.body[originalField] === undefined) return
+    const newOriginalInput = String(req.body[originalField] || '')
+    const previousOriginalInput = String(existingJobPost?.[originalField] || '')
+    if (newOriginalInput === previousOriginalInput) return
+    jobPostData[structuredField] = await structureText(newOriginalInput, outputType)
+  }))
   const jobPost = await HireTalentsJobPost.findOneAndUpdate(
     { user: req.user.id },
     { $set: jobPostData },
