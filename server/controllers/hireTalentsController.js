@@ -1,5 +1,6 @@
 const HireTalentsJobPost = require('../models/HireTalentsJobPost')
 const AppError = require('../utils/AppError')
+const { structureText } = require('../services/llmService')
 
 const fields = ['name', 'email', 'phone', 'companyName', 'jobTitle', 'category', 'jobType', 'location', 'address', 'description', 'experience', 'salary', 'benefits', 'qualifications']
 
@@ -14,6 +15,8 @@ async function saveJobPost(req, res) {
   const missingField = requiredFields.find((field) => !String(req.body[field] || '').trim())
   if (missingField) throw new AppError(`${missingField} is required.`, 400)
   const jobPostData = Object.fromEntries(fields.filter((field) => req.body[field] !== undefined).map((field) => [field, req.body[field]]))
+  if (req.body.description !== undefined) jobPostData.descriptionStructured = await structureText(req.body.description, 'description')
+  if (req.body.benefits !== undefined) jobPostData.benefitsStructured = await structureText(req.body.benefits, 'benefits')
   const jobPost = await HireTalentsJobPost.findOneAndUpdate(
     { user: req.user.id },
     { $set: jobPostData },

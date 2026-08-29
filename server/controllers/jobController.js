@@ -1,6 +1,7 @@
 const FindJobsProfile = require('../models/FindJobsProfile')
 const AppError = require('../utils/AppError')
 const { uploadProfileFiles } = require('../services/cloudinaryService')
+const { structureText } = require('../services/llmService')
 
 async function getFindJobsAccess(req, res) {
   res.status(200).json({ status: 'success', data: { message: 'Find Jobs access granted.' } })
@@ -19,6 +20,8 @@ async function saveFindJobsProfile(req, res) {
 
   const fields = ['name', 'email', 'phone', 'age', 'state', 'city', 'pincode', 'qualification', 'portfolio', 'skills', 'previousJobs', 'roles', 'skillsApplied', 'certifications', 'preferences']
   const profileData = Object.fromEntries(fields.filter((field) => req.body[field] !== undefined).map((field) => [field, req.body[field]]))
+  if (req.body.skills !== undefined) profileData.skillsStructured = await structureText(req.body.skills, 'skills')
+  if (req.body.preferences !== undefined) profileData.constraintsStructured = await structureText(req.body.preferences, 'constraints')
   const assets = await uploadProfileFiles(req.files)
   const profile = await FindJobsProfile.findOneAndUpdate(
     { user: req.user.id },

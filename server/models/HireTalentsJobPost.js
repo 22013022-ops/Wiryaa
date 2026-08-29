@@ -12,9 +12,11 @@ const hireTalentsJobPostSchema = new mongoose.Schema({
   location: { type: String, required: true, trim: true, maxlength: 150 },
   address: { type: String, trim: true, maxlength: 1000 },
   description: { type: String, required: true, trim: true, maxlength: 10000 },
+  descriptionStructured: [{ description: { type: String, required: true, trim: true, maxlength: 2000 } }],
   experience: { type: String, trim: true, maxlength: 200 },
   salary: { type: String, trim: true, maxlength: 200 },
   benefits: { type: String, trim: true, maxlength: 5000 },
+  benefitsStructured: [{ benefit: { type: String, required: true, trim: true, maxlength: 1000 } }],
   qualifications: { type: String, required: true, trim: true, maxlength: 5000 },
 }, { collection: 'hire_talents_job_posts', timestamps: true })
 
