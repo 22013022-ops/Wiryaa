@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 const speechLanguages = { en: 'en-IN', hi: 'hi-IN', mr: 'mr-IN' }
 
 function VoiceInputButton({ onTranscript, className = '' }) {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const recognitionRef = useRef(null)
   const [isListening, setIsListening] = useState(false)
   const [error, setError] = useState('')
@@ -22,7 +22,7 @@ function VoiceInputButton({ onTranscript, className = '' }) {
     recognition.continuous = false
     recognition.interimResults = false
     recognition.onresult = (event) => onTranscript?.(event.results[0][0].transcript.trim())
-    recognition.onerror = (event) => setError(event.error === 'not-allowed' ? 'Microphone permission was denied.' : 'Voice input could not be completed.')
+    recognition.onerror = (event) => setError(t(event.error === 'not-allowed' ? 'accessibility.microphoneDenied' : 'accessibility.voiceFailed'))
     recognition.onend = () => setIsListening(false)
     recognitionRef.current = recognition
     setError('')
@@ -30,7 +30,7 @@ function VoiceInputButton({ onTranscript, className = '' }) {
     recognition.start()
   }
 
-  return <span className={`voice-input-control ${className}`}><button type="button" onClick={startRecognition} disabled={!supported || isListening} aria-label={isListening ? 'Listening for voice input' : 'Use voice input'} title={supported ? 'Use voice input' : 'Voice input is not supported by this browser'}><FiMic aria-hidden="true" /> <span>{isListening ? 'Listening…' : 'Speak'}</span></button>{error && <small role="status">{error}</small>}</span>
+  return <span className={`voice-input-control ${className}`}><button type="button" onClick={startRecognition} disabled={!supported || isListening} aria-label={t(isListening ? 'accessibility.listening' : 'accessibility.voiceInput')} title={t(supported ? 'accessibility.voiceInput' : 'accessibility.unsupportedVoice')}><FiMic aria-hidden="true" /> <span>{t(isListening ? 'accessibility.listeningText' : 'accessibility.speak')}</span></button>{error && <small role="status">{error}</small>}</span>
 }
 
 export default VoiceInputButton

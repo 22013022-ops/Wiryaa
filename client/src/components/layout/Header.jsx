@@ -42,22 +42,22 @@ function Header() {
 
   return (
     <header className={`site-header ${scrolled ? 'is-scrolled' : ''}`}>
-      <nav className="navbar" aria-label="Primary navigation">
-        <a className="brand" href="/" aria-label="Wiryaa home">
+      <nav className="navbar" aria-label={t('accessibility.primaryNav')}>
+        <a className="brand" href="/" aria-label={t('auth.homeLabel')}>
           <img src={logo} alt="" />
           <span>Wiryaa</span>
         </a>
         <div className="nav-links">
           {links.map(([href, label, isAnchor]) => isAnchor ? <a key={href} className={active === href ? 'active' : ''} href={href}>{t(label)}</a> : <Link key={href} className={active === href ? 'active' : ''} to={href}>{t(label)}</Link>)}
           {user ? <div className="account-menu">
-            <button className="account-trigger" type="button" onClick={() => setAccountOpen((current) => !current)} aria-label="Open account menu" aria-expanded={accountOpen}><FiUser /><FiChevronDown /></button>
+            <button className="account-trigger" type="button" onClick={() => setAccountOpen((current) => !current)} aria-label={t('accessibility.accountMenu')} aria-expanded={accountOpen}><FiUser /><FiChevronDown /></button>
             <div className={`account-popover ${accountOpen ? 'is-open' : ''}`}>
               <div className="account-details"><strong>{user.fullName}</strong><span>{user.email || user.mobile}</span></div>
-              <Link to="/profile" onClick={() => setAccountOpen(false)}><FiUser /> My account</Link>
-              <label className="account-language"><span>Language</span><select value={i18n.language} onChange={changeLanguage} aria-label="Select language"><option value="en">English</option><option value="mr">मराठी</option><option value="hi">हिन्दी</option></select></label>
-              <button type="button" onClick={logout}><FiLogOut /> Log out</button>
+              <Link to="/profile" onClick={() => setAccountOpen(false)}><FiUser /> {t('common.account')}</Link>
+              <label className="account-language"><span>{t('common.language')}</span><select value={i18n.language} onChange={changeLanguage} aria-label={t('accessibility.languageSelect')}><option value="en">English</option><option value="mr">मराठी</option><option value="hi">हिन्दी</option></select></label>
+              <button type="button" onClick={logout}><FiLogOut /> {t('common.logout')}</button>
             </div>
-          </div> : <Link className="signup-link" to="/signup" state={{ destination: '/' }}>{t('signUp')}</Link>}
+          </div> : <Link className="signup-link" to="/signup" state={{ destination: '/' }}>{t('common.signUp')}</Link>}
         </div>
       </nav>
     </header>

@@ -16,7 +16,7 @@ function HeroSection() {
           <a className="hero-action hero-action-glass" href="/about">{t('hero.learn')}</a>
         </div>
       </motion.div>
-      <a className="scroll-indicator" href="#services" aria-label="Scroll to services"><span /></a>
+      <a className="scroll-indicator" href="#services" aria-label={t('accessibility.scrollServices')}><span /></a>
     </section>
   )
 }

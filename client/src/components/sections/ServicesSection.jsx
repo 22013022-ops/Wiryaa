@@ -22,12 +22,12 @@ const services = [
     reversed: true,
   },
   {
-    eyebrow: "Women's Marketplace",
-    title: "Women's Marketplace",
-    description: 'Home bakeries, tailoring studios, beauty services, tuition classes, handicrafts, homemade food — list your business in minutes. Customers discover, browse, and connect directly.',
-    action: 'Post your Business',
+    eyebrow: 'marketplace.eyebrow',
+    title: 'marketplace.title',
+    description: 'marketplace.description',
+    action: 'marketplace.action',
     image: marketplace,
-    imageAlt: 'Woman crafting a product',
+    imageAlt: 'marketplace.imageAlt',
     tone: 'cream',
   },
 ]
@@ -42,7 +42,7 @@ function ServiceCard({ service }) {
     <motion.article initial="hidden" whileInView="visible" viewport={{ once: true, amount: .12, margin: '0px 0px -8% 0px' }} className={`service-card ${service.tone} ${service.reversed ? 'reversed' : ''}`}>
       <div className="service-card-inner">
         <motion.div className="service-image-wrap" variants={{ hidden: { opacity: 0, y: 42 }, visible: { opacity: 1, y: 0, transition: { duration: .9, ease: [0.16, 1, 0.3, 1] } } }}>
-          <img className={loaded ? 'loaded' : ''} loading="lazy" src={service.image} alt={service.imageAlt} onLoad={() => setLoaded(true)} />
+          <img className={loaded ? 'loaded' : ''} loading="lazy" src={service.image} alt={t(service.imageAlt)} onLoad={() => setLoaded(true)} />
         </motion.div>
         <motion.div className="service-copy" variants={{ hidden: { opacity: 0, y: 32 }, visible: { opacity: 1, y: 0, transition: { duration: .82, delay: .16, ease: [0.16, 1, 0.3, 1] } } }}>
           <div>
@@ -51,7 +51,7 @@ function ServiceCard({ service }) {
           {isFindJobs || service.title === 'services.hire' ? (
             <Link className="service-action" to={isSignedIn ? serviceDestination : '/signup'} state={isSignedIn ? undefined : { destination: serviceDestination }}>{t(service.action)}</Link>
           ) : (
-            <a className="service-action" href="#signup">{service.action}</a>
+            <a className="service-action" href="#signup">{t(service.action)}</a>
           )}
         </motion.div>
       </div>
