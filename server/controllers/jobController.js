@@ -3,6 +3,7 @@ const AppError = require('../utils/AppError')
 const { uploadProfileFiles } = require('../services/cloudinaryService')
 const { structureText } = require('../services/llmService')
 const { translateToEnglish } = require('../services/translationService')
+const { queueProfileEmbedding, profileEmbeddingSourceChanged } = require('../services/embeddingService')
 
 async function getFindJobsAccess(req, res) {
   res.status(200).json({ status: 'success', data: { message: 'Find Jobs access granted.' } })
@@ -21,7 +22,7 @@ async function saveFindJobsProfile(req, res) {
 
   const fields = ['name', 'email', 'phone', 'age', 'state', 'city', 'pincode', 'qualification', 'portfolio', 'skills', 'previousJobs', 'roles', 'skillsApplied', 'certifications', 'preferences']
   const profileData = Object.fromEntries(fields.filter((field) => req.body[field] !== undefined).map((field) => [field, req.body[field]]))
-  const existingProfile = await FindJobsProfile.findOne({ user: req.user.id }).select('state city qualification skills preferences').lean()
+  const existingProfile = await FindJobsProfile.findOne({ user: req.user.id }).select('state city qualification skills preferences stateEnglish cityEnglish qualificationEnglish skillsStructured constraintsStructured').lean()
   const translatedFields = [
     { originalField: 'state', englishField: 'stateEnglish' },
     { originalField: 'city', englishField: 'cityEnglish' },
@@ -45,6 +46,7 @@ async function saveFindJobsProfile(req, res) {
     { $set: { ...profileData, ...assets } },
     { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
   )
+  if (!existingProfile || profileEmbeddingSourceChanged(existingProfile, profile)) queueProfileEmbedding(profile._id)
   res.status(200).json({ status: 'success', data: { profile } })
 }
 

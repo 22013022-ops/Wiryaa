@@ -2,6 +2,7 @@ const HireTalentsJobPost = require('../models/HireTalentsJobPost')
 const AppError = require('../utils/AppError')
 const { structureText } = require('../services/llmService')
 const { translateToEnglish } = require('../services/translationService')
+const { queueJobPostEmbedding, jobPostEmbeddingSourceChanged } = require('../services/embeddingService')
 
 const fields = ['name', 'email', 'phone', 'companyName', 'jobTitle', 'category', 'jobType', 'location', 'address', 'description', 'experience', 'salary', 'benefits', 'qualifications']
 
@@ -16,7 +17,7 @@ async function saveJobPost(req, res) {
   const missingField = requiredFields.find((field) => !String(req.body[field] || '').trim())
   if (missingField) throw new AppError(`${missingField} is required.`, 400)
   const jobPostData = Object.fromEntries(fields.filter((field) => req.body[field] !== undefined).map((field) => [field, req.body[field]]))
-  const existingJobPost = await HireTalentsJobPost.findOne({ user: req.user.id }).select('jobTitle category jobType location description benefits qualifications').lean()
+  const existingJobPost = await HireTalentsJobPost.findOne({ user: req.user.id }).select('jobTitle category jobType location description benefits qualifications jobTitleEnglish categoryEnglish jobTypeEnglish locationEnglish descriptionStructured benefitsStructured qualificationsEnglish').lean()
   const translatedFields = [
     { originalField: 'jobTitle', englishField: 'jobTitleEnglish' },
     { originalField: 'category', englishField: 'categoryEnglish' },
@@ -41,6 +42,7 @@ async function saveJobPost(req, res) {
     { $set: jobPostData },
     { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
   )
+  if (!existingJobPost || jobPostEmbeddingSourceChanged(existingJobPost, jobPost)) queueJobPostEmbedding(jobPost._id)
   res.status(200).json({ status: 'success', data: { jobPost } })
 }
 
