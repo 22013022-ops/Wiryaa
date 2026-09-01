@@ -2,6 +2,7 @@ const AppError = require('../utils/AppError')
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const MODEL = 'minimax/minimax-m2.7:free'
+const REQUEST_TIMEOUT_MS = Number.parseInt(process.env.LLM_REQUEST_TIMEOUT_MS, 10) || 90000
 
 function buildPrompt(text, outputType) {
   let prompt
@@ -238,12 +239,28 @@ function parseStructuredOutput(plainText, outputType) {
   return items.map((value) => ({ [field]: value }))
 }
 
+function textFromContent(value) {
+  if (typeof value === 'string') return value.trim() || null
+  if (value && typeof value === 'object' && !Array.isArray(value)) return textFromContent(value.text || value.content || value.output_text)
+  if (!Array.isArray(value)) return null
+  const text = value
+    .map((part) => typeof part === 'string' ? part : part?.text || part?.content || '')
+    .join('\n')
+    .trim()
+  return text || null
+}
+
+function responseTextCandidates(body) {
+  const content = textFromContent(body?.choices?.[0]?.message?.content)
+  return content ? [content] : []
+}
+
 async function structureText(text, outputType) {
   if (!String(text || '').trim()) return []
   if (!process.env.OPENROUTER_API_KEY) throw new AppError('OPENROUTER_API_KEY is not configured.', 500)
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 30000)
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
   try {
     const response = await fetch(OPENROUTER_URL, {
@@ -258,15 +275,39 @@ async function structureText(text, outputType) {
       }),
       signal: controller.signal,
     })
-    const body = await response.json().catch(() => null)
+    const rawBody = await response.text()
+    let body = null
+    try {
+      body = rawBody ? JSON.parse(rawBody) : null
+    } catch (_) {
+      console.error('LLM returned a non-JSON response:', {
+        status: response.status,
+        contentType: response.headers.get('content-type'),
+        rawBody,
+      })
+      throw new AppError('The LLM returned an invalid response format.', 502)
+    }
 
-    if (!response.ok) throw new AppError(body?.error?.message || 'The LLM request failed.', 502)
-    const plainText = body?.choices?.[0]?.message?.content
+    if (!response.ok) {
+      console.error('LLM request failed:', { status: response.status, body })
+      throw new AppError(body?.error?.message || 'The LLM request failed.', 502)
+    }
+    const candidates = responseTextCandidates(body)
+    if (!candidates.length) {
+      const finishReason = body?.choices?.[0]?.finish_reason
+      console.error('LLM response missing final message.content:', { status: response.status, body, rawBody })
+      throw new AppError(`The LLM returned no text content${finishReason ? ` (finish reason: ${finishReason})` : ''}.`, 502)
+    }
     console.log('LLM outputType:', outputType)
-    console.log('LLM full response:', JSON.stringify(body, null, 2))
-    console.log('LLM plainText:', plainText)
-    if (typeof plainText !== 'string') throw new AppError('The LLM returned no text content.', 502)
-    return parseStructuredOutput(plainText, outputType)
+    let formatError
+    for (const plainText of candidates) {
+      try {
+        return parseStructuredOutput(plainText, outputType)
+      } catch (error) {
+        formatError = error
+      }
+    }
+    throw formatError
   } catch (error) {
     if (error.isOperational) throw error
     if (error.name === 'AbortError') throw new AppError('The LLM request timed out.', 504)
