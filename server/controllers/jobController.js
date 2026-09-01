@@ -4,6 +4,7 @@ const { uploadProfileFiles } = require('../services/cloudinaryService')
 const { structureText } = require('../services/llmService')
 const { translateToEnglish } = require('../services/translationService')
 const { queueProfileEmbedding, profileEmbeddingSourceChanged } = require('../services/embeddingService')
+const { generateRecommendations } = require('../services/matchingService')
 
 async function getFindJobsAccess(req, res) {
   res.status(200).json({ status: 'success', data: { message: 'Find Jobs access granted.' } })
@@ -50,4 +51,12 @@ async function saveFindJobsProfile(req, res) {
   res.status(200).json({ status: 'success', data: { profile } })
 }
 
-module.exports = { getFindJobsAccess, getFindJobsProfile, saveFindJobsProfile }
+async function getRecommendations(req, res) {
+  const recommendations = await generateRecommendations(req.user.id)
+  const user = await require('../models/User').findById(req.user.id).select('fullName').lean()
+  console.log(`\nUser: ${user?.fullName || req.user.id}`)
+  recommendations.forEach(({ job, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => console.log(`${job.jobTitle} — final: ${finalScore.toFixed(3)}, skill: ${skillScore.toFixed(3)}, constraint: ${constraintScore.toFixed(3)}, location: ${locationScore.toFixed(3)}, conflict: ${conflictPenalty.toFixed(3)}`))
+  res.status(200).json({ status: 'success', data: { recommendations } })
+}
+
+module.exports = { getFindJobsAccess, getFindJobsProfile, saveFindJobsProfile, getRecommendations }
