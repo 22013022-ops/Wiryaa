@@ -10,6 +10,7 @@ const CANDIDATE_LIMIT = positiveInteger(process.env.MATCHING_CANDIDATE_LIMIT, 10
 const RESULTS_PER_SKILL = positiveInteger(process.env.MATCHING_RESULTS_PER_SKILL, 30)
 const VECTOR_INDEX = process.env.MATCHING_VECTOR_INDEX || 'job_description_embeddings'
 const NLI_MODEL_ID = process.env.MATCHING_NLI_MODEL || 'Xenova/nli-deberta-v3-xsmall'
+const CONFLICT_RELEVANCE_THRESHOLD = 0.5
 let nliPipelinePromise
 
 function positiveInteger(value, fallback) {
@@ -94,9 +95,11 @@ async function contradictionProbability(constraint, feature) {
   if (!constraint || !feature) return 0
   try {
     const classifier = await getNliPipeline()
+    const premise = `The job requires or offers the following working condition: ${feature}`
+    const hypothesis = `The worker has the following work constraint or preference: ${constraint}`
     // The text-classification pipeline accepts one text only, so tokenize the
     // premise/hypothesis pair directly before invoking the cross-encoder.
-    const inputs = classifier.tokenizer(constraint, { text_pair: feature, padding: true, truncation: true })
+    const inputs = classifier.tokenizer(premise, { text_pair: hypothesis, padding: true, truncation: true })
     const output = await classifier.model(inputs)
     const logits = Array.from(output.logits.data)
     const highest = Math.max(...logits)
@@ -105,29 +108,54 @@ async function contradictionProbability(constraint, feature) {
     const labels = classifier.model.config.id2label || {}
     const contradictionIndex = Object.entries(labels).find(([, label]) => /contradiction/i.test(label))?.[0] ?? '0'
     // Most MNLI exports map class 0 to contradiction when semantic labels are absent.
-    return clamp(probabilities[Number(contradictionIndex)] / denominator)
+    const probability = clamp(probabilities[Number(contradictionIndex)] / denominator)
+    console.log('NLI formatted conflict pair:', { constraint, feature, premise, hypothesis, contradictionProbability: probability })
+    return probability
   } catch (error) {
     console.error('NLI conflict detection failed; treating this pair as non-conflicting:', error.message)
     return 0
   }
 }
 
-async function scoreConflicts(constraintTexts, jobPost) {
+async function scoreConflicts(constraintTexts, constraintEmbeddings, jobEmbeddings) {
   if (!constraintTexts.length) return 0
-  const features = [jobPost.locationEnglish, jobPost.jobTypeEnglish, ...texts(jobPost.descriptionStructured, 'description'), ...texts(jobPost.benefitsStructured, 'benefit')].filter(Boolean)
-  if (!features.length) return 0
-  const conflicts = await Promise.all(constraintTexts.map(async (constraint) => {
-    const scores = await Promise.all(features.map((feature) => contradictionProbability(constraint, feature)))
-    return Math.max(0, ...scores)
+  const descriptionFeatures = (jobEmbeddings?.descriptionStructured || [])
+    .map(({ sourceText, embedding }) => ({ feature: String(sourceText || '').trim(), embedding }))
+    .filter(({ feature, embedding }) => feature && vector(embedding))
+  if (!descriptionFeatures.length) return 0
+  const conflicts = await Promise.all(constraintTexts.map(async (constraint, index) => {
+    const constraintEmbedding = constraintEmbeddings?.find(({ sourceText }) => sourceText === constraint)?.embedding
+      || constraintEmbeddings?.[index]?.embedding
+    const relevantFeatures = vector(constraintEmbedding)
+      ? descriptionFeatures.filter(({ embedding }) => cosineSimilarity(constraintEmbedding, embedding) >= CONFLICT_RELEVANCE_THRESHOLD)
+      : []
+    if (!relevantFeatures.length) {
+      console.log('NLI constraint-level conflict:', { constraint, constraintConflict: 0 })
+      return 0
+    }
+    const pairs = await Promise.all(relevantFeatures.map(async ({ feature }) => ({
+      feature,
+      contradictionProbability: await contradictionProbability(constraint, feature),
+    })))
+    pairs.forEach(({ feature, contradictionProbability: probability }) => console.log('NLI conflict pair:', {
+      constraint,
+      descriptionFeature: feature,
+      contradictionProbability: probability,
+    }))
+    const constraintConflict = Math.max(0, ...pairs.map(({ contradictionProbability: probability }) => probability))
+    console.log('NLI constraint-level conflict:', { constraint, constraintConflict })
+    return constraintConflict
   }))
-  return clamp(conflicts.reduce((sum, score) => sum + score, 0) / conflicts.length)
+  const conflictPenalty = clamp(conflicts.reduce((sum, score) => sum + score, 0) / conflicts.length)
+  console.log('NLI overall conflict penalty:', { conflictPenalty })
+  return conflictPenalty
 }
 
 async function retrieveCandidateJobIds(skillEmbeddings) {
   if (!skillEmbeddings.length) return []
   try {
     const searches = await Promise.all(skillEmbeddings.map((queryVector) => HireTalentsJobPostEmbedding.aggregate([
-      { $vectorSearch: { index: VECTOR_INDEX, path: 'embeddings.descriptionStructured.embedding', queryVector, numCandidates: RESULTS_PER_SKILL * 10, limit: RESULTS_PER_SKILL, filter: { status: 'completed' } } },
+      { $vectorSearch: { index: VECTOR_INDEX, path: 'embeddings.descriptionStructured.embedding', queryVector, numCandidates: RESULTS_PER_SKILL * 10, limit: RESULTS_PER_SKILL } },
       { $project: { jobPost: 1, retrievalScore: { $meta: 'vectorSearchScore' } } },
     ])))
     const bestScoreByJob = new Map()
@@ -174,6 +202,8 @@ async function generateRecommendations(userId) {
   const userSkills = embeddings(profileEmbeddings.embeddings?.skillsStructured)
   if (!userSkills.length) { const error = new Error('Add at least one skill before requesting recommendations.'); error.statusCode = 400; error.isOperational = true; throw error }
   const candidateIds = await retrieveCandidateJobIds(userSkills)
+  console.log('Candidate job IDs:', candidateIds)
+  console.log('Number of candidate jobs:', candidateIds.length)
   if (!candidateIds.length) return []
   const [jobs, jobEmbeddings] = await Promise.all([
     HireTalentsJobPost.find({ _id: { $in: candidateIds } }).lean(),
@@ -187,7 +217,7 @@ async function generateRecommendations(userId) {
     const skillScore = scoreSkills(userSkills, jobEmbedding)
     const constraintScore = scoreConstraints(constraints, jobEmbedding, job, constraintTexts)
     const locationScore = scoreLocation(profileEmbeddings.embeddings || {}, jobEmbedding)
-    const conflictPenalty = await scoreConflicts(constraintTexts, job)
+    const conflictPenalty = await scoreConflicts(constraintTexts, profileEmbeddings.embeddings?.constraintsStructured, jobEmbedding)
     const finalScore = clamp((0.6 * skillScore + 0.3 * constraintScore + 0.1 * locationScore) * (1 - conflictPenalty))
     const scores = { finalScore, skillScore, constraintScore, locationScore, conflictPenalty }
     await persistMatch(userId, job._id, scores)
