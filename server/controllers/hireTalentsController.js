@@ -3,6 +3,7 @@ const AppError = require('../utils/AppError')
 const { structureText } = require('../services/llmService')
 const { translateToEnglish } = require('../services/translationService')
 const { queueJobPostEmbedding, jobPostEmbeddingSourceChanged } = require('../services/embeddingService')
+const JPMatchedCandidates = require('../models/JPMatchedCandidates')
 
 const fields = ['name', 'email', 'phone', 'companyName', 'jobTitle', 'category', 'jobType', 'location', 'address', 'description', 'experience', 'salary', 'benefits', 'qualifications']
 
@@ -46,4 +47,14 @@ async function saveJobPost(req, res) {
   res.status(200).json({ status: 'success', data: { jobPost } })
 }
 
-module.exports = { getJobPost, saveJobPost }
+async function getMatchedCandidates(req, res) {
+  const jobPost = await HireTalentsJobPost.findOne({ user: req.user.id }).lean()
+  if (!jobPost) throw new AppError('Create a job post before viewing candidates.', 404)
+  const record = await JPMatchedCandidates.findOne({ jobPost: jobPost._id }).populate('candidates.user', 'fullName email mobile').lean()
+  const candidates = (record?.candidates || []).sort((a, b) => b.finalScore - a.finalScore)
+  console.log(`\nJob title: ${jobPost.jobTitle}\nJob category: ${jobPost.category}`)
+  candidates.forEach(({ user, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => console.log(`${user?.fullName || 'Unknown user'} — final: ${finalScore.toFixed(3)}, skill: ${skillScore.toFixed(3)}, constraint: ${constraintScore.toFixed(3)}, location: ${locationScore.toFixed(3)}, conflict: ${conflictPenalty.toFixed(3)}`))
+  res.status(200).json({ status: 'success', data: { candidates } })
+}
+
+module.exports = { getJobPost, saveJobPost, getMatchedCandidates }
