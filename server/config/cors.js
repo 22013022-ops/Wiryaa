@@ -9,7 +9,7 @@ const corsOptions = {
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
     return callback(new Error('This origin is not allowed by CORS.'))
   },
-  methods: ['GET', 'POST', 'PATCH'],
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }
 

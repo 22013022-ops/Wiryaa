@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useLocation } from 'react-router-dom'
 import { FiBriefcase, FiCheckCircle, FiFileText, FiHome, FiImage, FiLink, FiPlus, FiUser, FiUsers } from 'react-icons/fi'
 import '../styles/FindJobsPage.css'
 import logo from '../assets/icons/wiryaa-monogram.png'
@@ -8,9 +9,10 @@ import VoiceInputButton from '../components/forms/VoiceInputButton'
 import api from '../services/api'
 import JobPostDetails from '../components/jobs/JobPostDetails'
 import CandidateProfileDetails from '../components/profiles/CandidateProfileDetails'
+import Connections from '../components/connections/Connections'
 
 const fields = [{ name: 'name', type: 'text', required: true }, { name: 'email', type: 'email' }, { name: 'phone', type: 'tel', required: true }, { name: 'age', type: 'number', required: true, min: 16, max: 100 }, { name: 'state' }, { name: 'city' }, { name: 'pincode', pattern: '[0-9]{6}' }]
-const navItems = [{ id: 'create', icon: FiPlus }, { id: 'profile', icon: FiUser }, { id: 'recommendations', icon: FiBriefcase }]
+const navItems = [{ id: 'create', icon: FiPlus }, { id: 'profile', icon: FiUser }, { id: 'recommendations', icon: FiBriefcase }, { id: 'connections', icon: FiUsers }]
 
 function FileDrop({ name, label, hint, accept, icon: Icon, multiple = false, onDirty }) {
   const [fileName, setFileName] = useState('')
@@ -34,9 +36,10 @@ function ComingSoon({ page }) {
 }
 
 function Recommendations() {
-  const { t, i18n } = useTranslation(); const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('')
+  const { t, i18n } = useTranslation(); const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [sent, setSent] = useState(new Set()); const [sending, setSending] = useState(new Set())
   const [selectedJob, setSelectedJob] = useState(null)
-  const selectedJobId = useRef(null)
+  const location = useLocation()
+  const selectedJobId = useRef(new URLSearchParams(location.search).get('jobId'))
   const language = i18n.resolvedLanguage || i18n.language
   const openingId = useRef(globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`)
   const inFlight = useRef(null)
@@ -45,13 +48,14 @@ function Recommendations() {
     if (requestKey && inFlight.current?.viewId === requestKey) return inFlight.current.promise
     setLoading(true); setError('')
     const request = api.get('/jobs/recommendations', { params: { language, ...(viewId ? { recommendationViewId: viewId } : {}) } })
-    const promise = request.then((response) => { const matches = response.data.data.recommendations || []; console.table(matches.map(({ job, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => ({ job: job?.jobTitle, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }))); setItems(matches); if (selectedJobId.current) setSelectedJob(matches.find(({ job }) => String(job._id) === String(selectedJobId.current))?.job || null) }).catch((requestError) => { setError(requestError.response?.data?.message || t('findJobs.loadFailed')) }).finally(() => { setLoading(false); if (inFlight.current?.promise === promise) inFlight.current = null })
+    const promise = request.then(async (response) => { const matches = response.data.data.recommendations || []; console.table(matches.map(({ job, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => ({ job: job?.jobTitle, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }))); setItems(matches); const ids = matches.map(({ job }) => job?._id).filter(Boolean); if (ids.length) { const saved = await api.get('/notifications/requests/sent', { params: { type: 'contact_request', ids: ids.join(',') } }); setSent(new Set(saved.data.data.requests.map(({ jobPost }) => String(jobPost)))) }; if (selectedJobId.current) setSelectedJob(matches.find(({ job }) => String(job._id) === String(selectedJobId.current))?.job || null) }).catch((requestError) => { setError(requestError.response?.data?.message || t('findJobs.loadFailed')) }).finally(() => { setLoading(false); if (inFlight.current?.promise === promise) inFlight.current = null })
     if (requestKey) inFlight.current = { viewId: requestKey, promise }
     return promise
   }, [t, language])
   useEffect(() => { load(openingId.current) }, [load])
+  const requestContact = async (event, jobId) => { event.stopPropagation(); if (sent.has(String(jobId)) || sending.has(String(jobId))) return; setSending((current) => new Set(current).add(String(jobId))); try { await api.post('/notifications/requests', { type: 'contact_request', jobPostId: jobId }); setSent((current) => new Set(current).add(String(jobId))) } catch (requestError) { setError(requestError.response?.data?.message || t('notifications.actionFailed')) } finally { setSending((current) => { const next = new Set(current); next.delete(String(jobId)); return next }) } }
   if (selectedJob) return <JobPostDetails post={selectedJob} onBack={() => { selectedJobId.current = null; setSelectedJob(null) }} />
-  return <section className="fj-profile-page"><div className="fj-page-title"><div><p>{t('findJobs.workspace')}</p><h1>{t('findJobs.recommendations')}</h1><span>{t('findJobs.recommendationIntro')}</span></div><button className="fj-submit" type="button" onClick={() => load()} disabled={loading}>{loading ? t('findJobs.findingMatches') : t('findJobs.refreshRecommendations')}</button></div>{loading && <section className="fj-profile-status"><i className="fj-spinner fj-profile-spinner" aria-hidden="true" /> {t('findJobs.findingMatches')}</section>}{error && <section className="fj-profile-status fj-error" role="alert">{error}</section>}{!loading && !error && !items.length && <p className="fj-profile-empty">{t('findJobs.noRecommendedJobs')}</p>}<div className="fj-recommendation-grid">{items.map(({ job }) => <button className="fj-recommendation-card" key={job._id} type="button" onClick={() => { selectedJobId.current = job._id; setSelectedJob(job) }}><h2>{job.jobTitle}</h2><p>{job.description}</p><span>{t('findJobs.viewJobDetails')} →</span></button>)}</div></section>
+  return <section className="fj-profile-page"><div className="fj-page-title"><div><p>{t('findJobs.workspace')}</p><h1>{t('findJobs.recommendations')}</h1><span>{t('findJobs.recommendationIntro')}</span></div><button className="fj-submit" type="button" onClick={() => load()} disabled={loading}>{loading ? t('findJobs.findingMatches') : t('findJobs.refreshRecommendations')}</button></div>{loading && <section className="fj-profile-status"><i className="fj-spinner fj-profile-spinner" aria-hidden="true" /> {t('findJobs.findingMatches')}</section>}{error && <section className="fj-profile-status fj-error" role="alert">{error}</section>}{!loading && !error && !items.length && <p className="fj-profile-empty">{t('findJobs.noRecommendedJobs')}</p>}<div className="fj-recommendation-grid">{items.map(({ job }) => <article className="fj-recommendation-card" key={job._id}><button className="recommendation-card-open" type="button" onClick={() => { selectedJobId.current = job._id; setSelectedJob(job) }}><h2>{job.jobTitle}</h2><p>{job.description}</p><span>{t('findJobs.viewJobDetails')} →</span></button><button className="recommendation-request-button" type="button" disabled={sent.has(String(job._id)) || sending.has(String(job._id))} onClick={(event) => requestContact(event, job._id)}>{sent.has(String(job._id)) ? t('notifications.requestSent') : sending.has(String(job._id)) ? t('notifications.sending') : t('notifications.requestContact')}</button></article>)}</div></section>
 }
 
 function ProfileView() {
@@ -104,13 +108,13 @@ function CreateProfile({ profile, loadingProfile, onSaved }) {
 }
 
 function FindJobsPage() {
-  const { t } = useTranslation(); const [page, setPage] = useState('create'); const [profileDraft, setProfileDraft] = useState(null); const [loadingProfile, setLoadingProfile] = useState(true)
+  const { t } = useTranslation(); const location = useLocation(); const [page, setPage] = useState(new URLSearchParams(location.search).has('jobId') ? 'recommendations' : 'create'); const [profileDraft, setProfileDraft] = useState(null); const [loadingProfile, setLoadingProfile] = useState(true)
   useEffect(() => {
     let active = true
     api.get('/jobs/profile').then((response) => { if (active) setProfileDraft(response.data.data.profile) }).catch((requestError) => { if (requestError.response?.status !== 404 && active) setProfileDraft(null) }).finally(() => { if (active) setLoadingProfile(false) })
     return () => { active = false }
   }, [])
   const createLabel = t(profileDraft ? 'findJobs.update' : 'findJobs.create')
-  return <div className="find-jobs-shell"><div className="fj-layout"><div className="fj-profile-corner"><ProfileMenu /></div><aside className="fj-sidebar"><div className="fj-sidebar-top"><a className="fj-brand" href="/"><img src={logo} alt="" /><span>Wiryaa</span></a></div><a className="fj-sidebar-home" href="/"><FiHome /> <span>{t('findJobs.dashboard')}</span></a><p>{t('findJobs.yourJourney')}</p>{navItems.map(({ id, icon: Icon }) => <button key={id} type="button" className={page === id ? 'active' : ''} onClick={() => setPage(id)}><Icon /><span>{id === 'create' ? createLabel : t(`findJobs.${id}`)}</span>{page === id && <i />}</button>)}<div className="fj-sidebar-tip"><FiUsers /><span>{t('findJobs.tip')}</span></div></aside><header className="fj-mobile-header"><a className="fj-brand" href="/"><img src={logo} alt="" /><span>Wiryaa</span></a><span>{t('findJobs.workspace')}</span></header><nav className="fj-mobile-nav" aria-label={t('findJobs.yourJourney')}>{navItems.map(({ id, icon: Icon }) => <button key={id} type="button" className={page === id ? 'active' : ''} onClick={() => setPage(id)}><Icon /><span>{id === 'create' ? createLabel : t(`findJobs.${id}`)}</span></button>)}</nav><main className="fj-content">{page === 'create' ? <CreateProfile key={profileDraft?._id || 'new'} profile={profileDraft} loadingProfile={loadingProfile} onSaved={setProfileDraft} /> : page === 'profile' ? <ProfileView /> : <Recommendations />}</main></div></div>
+  return <div className="find-jobs-shell"><div className="fj-layout"><div className="fj-profile-corner"><ProfileMenu /></div><aside className="fj-sidebar"><div className="fj-sidebar-top"><a className="fj-brand" href="/"><img src={logo} alt="" /><span>Wiryaa</span></a></div><a className="fj-sidebar-home" href="/"><FiHome /> <span>{t('findJobs.dashboard')}</span></a><p>{t('findJobs.yourJourney')}</p>{navItems.map(({ id, icon: Icon }) => <button key={id} type="button" className={page === id ? 'active' : ''} onClick={() => setPage(id)}><Icon /><span>{id === 'create' ? createLabel : t(`findJobs.${id}`)}</span>{page === id && <i />}</button>)}<div className="fj-sidebar-tip"><FiUsers /><span>{t('findJobs.tip')}</span></div></aside><header className="fj-mobile-header"><a className="fj-brand" href="/"><img src={logo} alt="" /><span>Wiryaa</span></a><span>{t('findJobs.workspace')}</span></header><nav className="fj-mobile-nav" aria-label={t('findJobs.yourJourney')}>{navItems.map(({ id, icon: Icon }) => <button key={id} type="button" className={page === id ? 'active' : ''} onClick={() => setPage(id)}><Icon /><span>{id === 'create' ? createLabel : t(`findJobs.${id}`)}</span></button>)}</nav><main className="fj-content">{page === 'create' ? <CreateProfile key={profileDraft?._id || 'new'} profile={profileDraft} loadingProfile={loadingProfile} onSaved={setProfileDraft} /> : page === 'profile' ? <ProfileView /> : page === 'connections' ? <Connections workspace="findJobs" /> : <Recommendations />}</main></div></div>
 }
 export default FindJobsPage

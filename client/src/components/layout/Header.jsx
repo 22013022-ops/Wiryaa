@@ -4,6 +4,7 @@ import logo from '../../assets/icons/wiryaa-monogram.png'
 import { useTranslation } from 'react-i18next'
 import { FiChevronDown, FiLogOut, FiUser } from 'react-icons/fi'
 import { getSessionUser } from '../../services/authStorage'
+import NotificationBell from '../notifications/NotificationBell'
 
 const links = [
   ['/', 'common.home', false],
@@ -49,7 +50,7 @@ function Header() {
         </a>
         <div className="nav-links">
           {links.map(([href, label, isAnchor]) => isAnchor ? <a key={href} className={active === href ? 'active' : ''} href={href}>{t(label)}</a> : <Link key={href} className={active === href ? 'active' : ''} to={href}>{t(label)}</Link>)}
-          {user ? <div className="account-menu">
+          {user ? <><NotificationBell /><div className="account-menu">
             <button className="account-trigger" type="button" onClick={() => setAccountOpen((current) => !current)} aria-label={t('accessibility.accountMenu')} aria-expanded={accountOpen}><FiUser /><FiChevronDown /></button>
             <div className={`account-popover ${accountOpen ? 'is-open' : ''}`}>
               <div className="account-details"><strong>{user.fullName}</strong><span>{user.email || user.mobile}</span></div>
@@ -57,7 +58,7 @@ function Header() {
               <label className="account-language"><span>{t('common.language')}</span><select value={i18n.language} onChange={changeLanguage} aria-label={t('accessibility.languageSelect')}><option value="en">English</option><option value="mr">मराठी</option><option value="hi">हिन्दी</option></select></label>
               <button type="button" onClick={logout}><FiLogOut /> {t('common.logout')}</button>
             </div>
-          </div> : <Link className="signup-link" to="/signup" state={{ destination: '/' }}>{t('common.signUp')}</Link>}
+          </div></> : <Link className="signup-link" to="/signup" state={{ destination: '/' }}>{t('common.signUp')}</Link>}
         </div>
       </nav>
     </header>

@@ -3,6 +3,7 @@ import { FiChevronDown, FiGlobe, FiLogOut, FiUser } from 'react-icons/fi'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { getSessionUser } from '../../services/authStorage'
+import NotificationBell from '../notifications/NotificationBell'
 import '../../styles/ProfileMenu.css'
 
 function ProfileMenu({ className = '' }) {
@@ -24,6 +25,7 @@ function ProfileMenu({ className = '' }) {
   }
 
   return <div className={`profile-menu ${className}`}>
+    <NotificationBell />
     <button className="profile-menu-trigger" type="button" onClick={() => setIsOpen((open) => !open)} aria-label={t('common.account')} aria-expanded={isOpen}><span className="profile-menu-avatar">{initials}</span><FiChevronDown /></button>
     <div className={`profile-menu-popover ${isOpen ? 'is-open' : ''}`}>
       <div className="profile-menu-details"><span className="profile-menu-avatar large">{initials}</span><div><strong>{user?.fullName || t('common.account')}</strong><small>{contact}</small>{user?.gender && <small>{user.gender}</small>}</div></div>

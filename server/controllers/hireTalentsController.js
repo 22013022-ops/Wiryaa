@@ -89,7 +89,7 @@ async function getMatchedCandidates(req, res) {
       conflictPenalty,
     })), null, 2))
   }
-  res.status(200).json({ status: 'success', data: { candidates: recommendations } })
+  res.status(200).json({ status: 'success', data: { candidates: recommendations, jobPostId: jobPost._id } })
 }
 
 async function getMatchedCandidateProfile(req, res) {
