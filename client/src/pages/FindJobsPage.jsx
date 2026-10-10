@@ -34,31 +34,35 @@ function ComingSoon({ page }) {
 }
 
 function Recommendations() {
-  const { t } = useTranslation(); const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('')
+  const { t, i18n } = useTranslation(); const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('')
   const [selectedJob, setSelectedJob] = useState(null)
+  const selectedJobId = useRef(null)
+  const language = i18n.resolvedLanguage || i18n.language
   const openingId = useRef(globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`)
   const inFlight = useRef(null)
   const load = useCallback(async (viewId) => {
-    if (viewId && inFlight.current?.viewId === viewId) return inFlight.current.promise
+    const requestKey = viewId ? `${viewId}:${language}` : null
+    if (requestKey && inFlight.current?.viewId === requestKey) return inFlight.current.promise
     setLoading(true); setError('')
-    const request = api.get('/jobs/recommendations', viewId ? { params: { recommendationViewId: viewId } } : undefined)
-    const promise = request.then((response) => { const matches = response.data.data.recommendations || []; console.table(matches.map(({ job, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => ({ job: job?.jobTitle, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }))); setItems(matches) }).catch((requestError) => { setError(requestError.response?.data?.message || t('findJobs.loadFailed')) }).finally(() => { setLoading(false); if (inFlight.current?.promise === promise) inFlight.current = null })
-    if (viewId) inFlight.current = { viewId, promise }
+    const request = api.get('/jobs/recommendations', { params: { language, ...(viewId ? { recommendationViewId: viewId } : {}) } })
+    const promise = request.then((response) => { const matches = response.data.data.recommendations || []; console.table(matches.map(({ job, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => ({ job: job?.jobTitle, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }))); setItems(matches); if (selectedJobId.current) setSelectedJob(matches.find(({ job }) => String(job._id) === String(selectedJobId.current))?.job || null) }).catch((requestError) => { setError(requestError.response?.data?.message || t('findJobs.loadFailed')) }).finally(() => { setLoading(false); if (inFlight.current?.promise === promise) inFlight.current = null })
+    if (requestKey) inFlight.current = { viewId: requestKey, promise }
     return promise
-  }, [t])
+  }, [t, language])
   useEffect(() => { load(openingId.current) }, [load])
-  if (selectedJob) return <JobPostDetails post={selectedJob} onBack={() => setSelectedJob(null)} />
-  return <section className="fj-profile-page"><div className="fj-page-title"><div><p>{t('findJobs.workspace')}</p><h1>{t('findJobs.recommendations')}</h1><span>Personalized matches are ranked using your profile and preferences.</span></div><button className="fj-submit" type="button" onClick={() => load()} disabled={loading}>{loading ? 'Finding matches…' : 'Refresh recommendations'}</button></div>{loading && <section className="fj-profile-status"><i className="fj-spinner fj-profile-spinner" aria-hidden="true" /> Finding job matches…</section>}{error && <section className="fj-profile-status fj-error" role="alert">{error}</section>}{!loading && !error && !items.length && <p className="fj-profile-empty">No matching jobs are available yet. Add skills to your profile and try again later.</p>}<div className="fj-recommendation-grid">{items.map(({ job }) => <button className="fj-recommendation-card" key={job._id} type="button" onClick={() => setSelectedJob(job)}><h2>{job.jobTitle}</h2><p>{job.description}</p><span>View job details →</span></button>)}</div></section>
+  if (selectedJob) return <JobPostDetails post={selectedJob} onBack={() => { selectedJobId.current = null; setSelectedJob(null) }} />
+  return <section className="fj-profile-page"><div className="fj-page-title"><div><p>{t('findJobs.workspace')}</p><h1>{t('findJobs.recommendations')}</h1><span>{t('findJobs.recommendationIntro')}</span></div><button className="fj-submit" type="button" onClick={() => load()} disabled={loading}>{loading ? t('findJobs.findingMatches') : t('findJobs.refreshRecommendations')}</button></div>{loading && <section className="fj-profile-status"><i className="fj-spinner fj-profile-spinner" aria-hidden="true" /> {t('findJobs.findingMatches')}</section>}{error && <section className="fj-profile-status fj-error" role="alert">{error}</section>}{!loading && !error && !items.length && <p className="fj-profile-empty">{t('findJobs.noRecommendedJobs')}</p>}<div className="fj-recommendation-grid">{items.map(({ job }) => <button className="fj-recommendation-card" key={job._id} type="button" onClick={() => { selectedJobId.current = job._id; setSelectedJob(job) }}><h2>{job.jobTitle}</h2><p>{job.description}</p><span>{t('findJobs.viewJobDetails')} →</span></button>)}</div></section>
 }
 
 function ProfileView() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [profile, setProfile] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState('')
+  const language = i18n.resolvedLanguage || i18n.language
   useEffect(() => {
     let active = true
-    api.get('/jobs/profile').then((response) => { if (active) setProfile(response.data.data.profile) }).catch((requestError) => { if (active) setError(requestError.response?.data?.message || t('findJobs.loadFailed')) }).finally(() => { if (active) setLoading(false) })
+    api.get('/jobs/profile', { params: { language } }).then((response) => { if (active) setProfile(response.data.data.profile) }).catch((requestError) => { if (active) setError(requestError.response?.data?.message || t('findJobs.loadFailed')) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [language, t])
   if (loading) return <section className="fj-profile-status"><i className="fj-spinner fj-profile-spinner" aria-hidden="true" /> {t('findJobs.loading')}</section>
   if (error) return <section className="fj-profile-status fj-error" role="alert">{error}</section>
   return <CandidateProfileDetails profile={profile} workspaceLabel={t('findJobs.workspace')} title={t('findJobs.myProfile')} subtitle={t('findJobs.profileReadOnly')} />

@@ -8,6 +8,7 @@ const { generateRecommendations } = require('../services/matchingService')
 const JSMatchedJobs = require('../models/JSMatchedJobs')
 const JPMatchedCandidates = require('../models/JPMatchedCandidates')
 const User = require('../models/User')
+const { normalizeLanguage, translateFieldsForViewer } = require('../services/translationService')
 
 const loggedRecommendationViews = new Map()
 
@@ -30,8 +31,11 @@ async function getFindJobsAccess(req, res) {
 }
 
 async function getFindJobsProfile(req, res) {
-  const profile = await FindJobsProfile.findOne({ user: req.user.id }).lean()
+  let profile = await FindJobsProfile.findOne({ user: req.user.id }).lean()
   if (!profile) throw new AppError('Create your profile before viewing it.', 404)
+  if (req.query.language) {
+    profile = await translateFieldsForViewer(profile, ['name', 'state', 'city', 'qualification', 'skills', 'previousJobs', 'roles', 'skillsApplied', 'certifications', 'preferences'], normalizeLanguage(req.query.language))
+  }
   res.status(200).json({ status: 'success', data: { profile } })
 }
 
@@ -104,7 +108,12 @@ async function getRecommendations(req, res) {
       conflictPenalty,
     })), null, 2))
   }
-  res.status(200).json({ status: 'success', data: { recommendations } })
+  const viewerLanguage = normalizeLanguage(req.query.language)
+  const localizedRecommendations = await Promise.all(recommendations.map(async (recommendation) => ({
+    ...recommendation,
+    job: await translateFieldsForViewer(recommendation.job, ['name', 'companyName', 'jobTitle', 'category', 'jobType', 'location', 'address', 'description', 'experience', 'salary', 'benefits', 'qualifications'], viewerLanguage),
+  })))
+  res.status(200).json({ status: 'success', data: { recommendations: localizedRecommendations } })
 }
 
 module.exports = { getFindJobsAccess, getFindJobsProfile, saveFindJobsProfile, getRecommendations }

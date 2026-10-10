@@ -20,7 +20,7 @@ async function getTranslator() {
 
 async function translateText(text, { from = 'en', to = 'en' } = {}) {
   const value = String(text || '')
-  const sourceLanguage = normalizeLanguage(from)
+  const sourceLanguage = from === 'auto' ? 'auto' : normalizeLanguage(from)
   const targetLanguage = normalizeLanguage(to)
   if (!value.trim() || sourceLanguage === targetLanguage) return value
 
@@ -43,4 +43,35 @@ function translateFromEnglish(text, viewerLanguage) {
   return translateText(text, { from: 'en', to: viewerLanguage })
 }
 
-module.exports = { normalizeLanguage, translateToEnglish, translateFromEnglish }
+function translateForViewer(text, viewerLanguage) {
+  const value = String(text || '')
+  const targetLanguage = normalizeLanguage(viewerLanguage)
+  if (!value.trim()) return Promise.resolve(value)
+
+  return fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLanguage}&dt=t&q=${encodeURIComponent(value)}`)
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Translation provider returned ${response.status}.`)
+      const payload = await response.json()
+      const translated = payload?.[0]?.map((part) => part[0]).join('')
+      if (!translated) throw new Error('Translation provider returned no translated text.')
+      return translated
+    })
+    .catch(() => { throw new AppError('Unable to translate the submitted text.', 502) })
+}
+
+async function translateFieldsForViewer(record, fields, viewerLanguage) {
+  if (!record) return record
+  const failedFields = []
+  const translated = await Promise.all(fields.map(async (field) => {
+    try {
+      return [field, await translateForViewer(record[field], viewerLanguage)]
+    } catch (_) {
+      failedFields.push(field)
+      return [field, record[field]]
+    }
+  }))
+  if (failedFields.length) console.warn(`Content translation fell back to original text for fields: ${failedFields.join(', ')}`)
+  return { ...record, ...Object.fromEntries(translated) }
+}
+
+module.exports = { normalizeLanguage, translateToEnglish, translateFromEnglish, translateForViewer, translateFieldsForViewer }

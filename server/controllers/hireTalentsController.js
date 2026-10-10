@@ -6,6 +6,7 @@ const { queueJobPostEmbedding, jobPostEmbeddingSourceChanged } = require('../ser
 const JPMatchedCandidates = require('../models/JPMatchedCandidates')
 const FindJobsProfile = require('../models/FindJobsProfile')
 const User = require('../models/User')
+const { normalizeLanguage, translateFieldsForViewer } = require('../services/translationService')
 
 const loggedRecommendationViews = new Map()
 
@@ -26,8 +27,9 @@ function shouldLogRecommendationScores(req) {
 const fields = ['name', 'email', 'phone', 'companyName', 'jobTitle', 'category', 'jobType', 'location', 'address', 'description', 'experience', 'salary', 'benefits', 'qualifications']
 
 async function getJobPost(req, res) {
-  const jobPost = await HireTalentsJobPost.findOne({ user: req.user.id }).lean()
+  let jobPost = await HireTalentsJobPost.findOne({ user: req.user.id }).lean()
   if (!jobPost) throw new AppError('Create a job post before viewing it.', 404)
+  if (req.query.language) jobPost = await translateFieldsForViewer(jobPost, ['name', 'companyName', 'jobTitle', 'category', 'jobType', 'location', 'address', 'description', 'experience', 'salary', 'benefits', 'qualifications'], normalizeLanguage(req.query.language))
   res.status(200).json({ status: 'success', data: { jobPost } })
 }
 
@@ -72,7 +74,9 @@ async function getMatchedCandidates(req, res) {
   const candidates = (record?.candidates || []).sort((a, b) => b.finalScore - a.finalScore)
   const profileIds = candidates.map(({ user }) => user?._id).filter(Boolean)
   const profiles = await FindJobsProfile.find({ user: { $in: profileIds } }).select('user name skills previousJobs roles qualification').lean()
-  const profileByUserId = new Map(profiles.map((profile) => [String(profile.user), profile]))
+  const viewerLanguage = normalizeLanguage(req.query.language)
+  const localizedProfiles = await Promise.all(profiles.map((profile) => translateFieldsForViewer(profile, ['name', 'skills', 'previousJobs', 'roles', 'qualification'], viewerLanguage)))
+  const profileByUserId = new Map(localizedProfiles.map((profile) => [String(profile.user), profile]))
   const recommendations = candidates.map((candidate) => ({ ...candidate, profile: profileByUserId.get(String(candidate.user?._id)) || null }))
   if (shouldLogRecommendationScores(req)) {
     const employer = await User.findById(req.user.id).select('fullName').lean()
@@ -93,8 +97,9 @@ async function getMatchedCandidateProfile(req, res) {
   if (!jobPost) throw new AppError('Create a job post before viewing candidates.', 404)
   const matchRecord = await JPMatchedCandidates.findOne({ jobPost: jobPost._id, 'candidates.user': req.params.userId }).select('_id').lean()
   if (!matchRecord) throw new AppError('This candidate is not in your recommendations.', 404)
-  const profile = await FindJobsProfile.findOne({ user: req.params.userId }).lean()
+  let profile = await FindJobsProfile.findOne({ user: req.params.userId }).lean()
   if (!profile) throw new AppError('Candidate profile not found.', 404)
+  profile = await translateFieldsForViewer(profile, ['name', 'state', 'city', 'qualification', 'skills', 'previousJobs', 'roles', 'skillsApplied', 'certifications', 'preferences'], normalizeLanguage(req.query.language))
   res.status(200).json({ status: 'success', data: { profile } })
 }
 
