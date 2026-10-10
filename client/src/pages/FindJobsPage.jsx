@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FiAward, FiBriefcase, FiCheckCircle, FiExternalLink, FiFileText, FiHome, FiImage, FiLink, FiMail, FiMapPin, FiPhone, FiPlus, FiUser, FiUsers } from 'react-icons/fi'
+import { FiBriefcase, FiCheckCircle, FiFileText, FiHome, FiImage, FiLink, FiPlus, FiUser, FiUsers } from 'react-icons/fi'
 import '../styles/FindJobsPage.css'
 import logo from '../assets/icons/wiryaa-monogram.png'
 import ProfileMenu from '../components/layout/ProfileMenu'
 import VoiceInputButton from '../components/forms/VoiceInputButton'
 import api from '../services/api'
+import JobPostDetails from '../components/jobs/JobPostDetails'
+import CandidateProfileDetails from '../components/profiles/CandidateProfileDetails'
 
 const fields = [{ name: 'name', type: 'text', required: true }, { name: 'email', type: 'email' }, { name: 'phone', type: 'tel', required: true }, { name: 'age', type: 'number', required: true, min: 16, max: 100 }, { name: 'state' }, { name: 'city' }, { name: 'pincode', pattern: '[0-9]{6}' }]
 const navItems = [{ id: 'create', icon: FiPlus }, { id: 'profile', icon: FiUser }, { id: 'recommendations', icon: FiBriefcase }]
@@ -33,15 +35,11 @@ function ComingSoon({ page }) {
 
 function Recommendations() {
   const { t } = useTranslation(); const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('')
-  const load = useCallback(async () => { setLoading(true); setError(''); try { const response = await api.get('/jobs/recommendations'); setItems(response.data.data.recommendations || []) } catch (requestError) { setError(requestError.response?.data?.message || t('findJobs.loadFailed')) } finally { setLoading(false) } }, [t])
+  const [selectedJob, setSelectedJob] = useState(null)
+  const load = useCallback(async () => { setLoading(true); setError(''); try { const response = await api.get('/jobs/recommendations'); const matches = response.data.data.recommendations || []; console.table(matches.map(({ job, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => ({ job: job?.jobTitle, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }))); setItems(matches) } catch (requestError) { setError(requestError.response?.data?.message || t('findJobs.loadFailed')) } finally { setLoading(false) } }, [t])
   useEffect(() => { load() }, [load])
-  return <section className="fj-profile-page"><div className="fj-page-title"><div><p>{t('findJobs.workspace')}</p><h1>{t('findJobs.recommendations')}</h1><span>Personalized matches are ranked using your profile and preferences.</span></div><button className="fj-submit" type="button" onClick={load} disabled={loading}>{loading ? 'Finding matches…' : 'Refresh recommendations'}</button></div>{loading && <section className="fj-profile-status"><i className="fj-spinner fj-profile-spinner" aria-hidden="true" /> Finding job matches…</section>}{error && <section className="fj-profile-status fj-error" role="alert">{error}</section>}{!loading && !error && !items.length && <p className="fj-profile-empty">No matching jobs are available yet. Add skills to your profile and try again later.</p>}{items.map(({ job, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => <article className="fj-profile-card" key={job._id}><h2>{job.jobTitle}</h2><p>{job.companyName} · {job.location} · {job.jobType}</p><p>{job.description}</p><div className="fj-profile-details"><div><span>Final score</span><p>{(finalScore * 100).toFixed(1)}%</p></div><div><span>Skill</span><p>{skillScore.toFixed(3)}</p></div><div><span>Constraint</span><p>{constraintScore.toFixed(3)}</p></div><div><span>Location</span><p>{locationScore.toFixed(3)}</p></div><div><span>Conflict penalty</span><p>{conflictPenalty.toFixed(3)}</p></div></div></article>)}</section>
-}
-
-function AssetGallery({ assets = [], emptyMessage }) {
-  const { t } = useTranslation()
-  if (!assets.length) return <p className="fj-profile-empty">{emptyMessage}</p>
-  return <div className="fj-asset-gallery">{assets.map((asset) => asset.resource_type === 'image' ? <a key={asset.public_id} className="fj-image-asset" href={asset.secure_url} target="_blank" rel="noreferrer"><img src={asset.secure_url} alt={t('findJobs.uploadedAsset')} /></a> : asset.resource_type === 'video' ? <video key={asset.public_id} className="fj-video-asset" controls preload="metadata"><source src={asset.secure_url} /></video> : <a key={asset.public_id} className="fj-document-asset" href={asset.secure_url} target="_blank" rel="noreferrer"><FiFileText /><span>{t('findJobs.attachment')}</span><FiExternalLink /></a>)}</div>
+  if (selectedJob) return <JobPostDetails post={selectedJob} onBack={() => setSelectedJob(null)} />
+  return <section className="fj-profile-page"><div className="fj-page-title"><div><p>{t('findJobs.workspace')}</p><h1>{t('findJobs.recommendations')}</h1><span>Personalized matches are ranked using your profile and preferences.</span></div><button className="fj-submit" type="button" onClick={load} disabled={loading}>{loading ? 'Finding matches…' : 'Refresh recommendations'}</button></div>{loading && <section className="fj-profile-status"><i className="fj-spinner fj-profile-spinner" aria-hidden="true" /> Finding job matches…</section>}{error && <section className="fj-profile-status fj-error" role="alert">{error}</section>}{!loading && !error && !items.length && <p className="fj-profile-empty">No matching jobs are available yet. Add skills to your profile and try again later.</p>}<div className="fj-recommendation-grid">{items.map(({ job }) => <button className="fj-recommendation-card" key={job._id} type="button" onClick={() => setSelectedJob(job)}><h2>{job.jobTitle}</h2><p>{job.description}</p><span>View job details →</span></button>)}</div></section>
 }
 
 function ProfileView() {
@@ -54,19 +52,7 @@ function ProfileView() {
   }, [])
   if (loading) return <section className="fj-profile-status"><i className="fj-spinner fj-profile-spinner" aria-hidden="true" /> {t('findJobs.loading')}</section>
   if (error) return <section className="fj-profile-status fj-error" role="alert">{error}</section>
-  const location = [profile.city, profile.state].filter(Boolean).join(', ') || t('findJobs.locationNotAdded')
-  const workSamples = Array.isArray(profile.workSamples) ? profile.workSamples : profile.workSamples ? [profile.workSamples] : []
-  return <article className="fj-profile-page">
-    <div className="fj-page-title"><div><p>{t('findJobs.workspace')}</p><h1>{t('findJobs.myProfile')}</h1><span>{t('findJobs.profileReadOnly')}</span></div></div>
-    <nav className="fj-profile-nav" aria-label={t('findJobs.profileSections')}><a href="#about">{t('findJobs.about')}</a><a href="#skills">{t('findJobs.skills')}</a><a href="#experience">{t('findJobs.experienceEducation')}</a><a href="#work-samples">{t('findJobs.workSamples')}</a><a href="#resume">{t('findJobs.resume')}</a></nav>
-    <header className="fj-profile-header"><div className="fj-profile-photo">{profile.profilePicture?.secure_url ? <img src={profile.profilePicture.secure_url} alt={`${profile.name}'s profile`} /> : <FiUser aria-label={t('findJobs.photoUnavailable')} />}</div><div className="fj-profile-title"><h2>{profile.name}</h2><span>{profile.age ? t('findJobs.yearsOld', { age: profile.age }) : t('findJobs.ageNotAdded')}</span><div className="fj-profile-contact">{profile.email && <a href={`mailto:${profile.email}`}><FiMail /> {profile.email}</a>}<a href={`tel:${profile.phone}`}><FiPhone /> {profile.phone}</a><span><FiMapPin /> {location}</span></div></div></header>
-    <section className="fj-profile-card" id="about"><h2>{t('findJobs.about')}</h2><p>{profile.preferences || t('findJobs.noPreferences')}</p></section>
-    <section className="fj-profile-card" id="skills"><h2>{t('findJobs.skills')}</h2><p>{profile.skills || t('findJobs.noSkills')}</p></section>
-    <section className="fj-profile-card" id="experience"><h2>{t('findJobs.experienceEducation')}</h2><div className="fj-profile-details"><div><span>{t('findJobs.qualification')}</span><p>{profile.qualification || t('findJobs.notAdded')}</p></div><div><span>{t('findJobs.previousJobs')}</span><p>{profile.previousJobs || t('findJobs.notAdded')}</p></div><div><span>{t('findJobs.roles')}</span><p>{profile.roles || t('findJobs.notAdded')}</p></div></div></section>
-    <section className="fj-profile-card"><h2><FiAward /> {t('findJobs.certifications')}</h2>{profile.certifications && <p>{profile.certifications}</p>}<AssetGallery assets={profile.certificationAttachments || []} emptyMessage={t(profile.certifications ? 'findJobs.noCertificates' : 'findJobs.noCertifications')} /></section>
-    <section className="fj-profile-card" id="work-samples"><h2>{t('findJobs.workSamples')}</h2><AssetGallery assets={workSamples} emptyMessage={t('findJobs.noSamples')} /></section>
-    <section className="fj-profile-card fj-profile-resources" id="resume"><div><h2>{t('findJobs.resume')}</h2><p>{t('findJobs.openResume')}</p></div>{profile.resume ? <a className="fj-resource-link" href={profile.resume.secure_url} target="_blank" rel="noreferrer"><FiFileText /> {t('findJobs.viewResume')} <FiExternalLink /></a> : <span className="fj-profile-empty">{t('findJobs.noResume')}</span>}<div className="fj-portfolio-resource"><h2>{t('findJobs.portfolioLinks')}</h2>{profile.portfolio ? <a className="fj-resource-link" href={profile.portfolio} target="_blank" rel="noreferrer"><FiLink /> {t('findJobs.viewPortfolio')} <FiExternalLink /></a> : <span className="fj-profile-empty">{t('findJobs.noPortfolio')}</span>}</div></section>
-  </article>
+  return <CandidateProfileDetails profile={profile} workspaceLabel={t('findJobs.workspace')} title={t('findJobs.myProfile')} subtitle={t('findJobs.profileReadOnly')} />
 }
 
 function CreateProfile({ profile, loadingProfile, onSaved }) {

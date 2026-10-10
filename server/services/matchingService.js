@@ -109,7 +109,6 @@ async function contradictionProbability(constraint, feature) {
     const contradictionIndex = Object.entries(labels).find(([, label]) => /contradiction/i.test(label))?.[0] ?? '0'
     // Most MNLI exports map class 0 to contradiction when semantic labels are absent.
     const probability = clamp(probabilities[Number(contradictionIndex)] / denominator)
-    console.log('NLI formatted conflict pair:', { constraint, feature, premise, hypothesis, contradictionProbability: probability })
     return probability
   } catch (error) {
     console.error('NLI conflict detection failed; treating this pair as non-conflicting:', error.message)
@@ -130,24 +129,16 @@ async function scoreConflicts(constraintTexts, constraintEmbeddings, jobEmbeddin
       ? descriptionFeatures.filter(({ embedding }) => cosineSimilarity(constraintEmbedding, embedding) >= CONFLICT_RELEVANCE_THRESHOLD)
       : []
     if (!relevantFeatures.length) {
-      console.log('NLI constraint-level conflict:', { constraint, constraintConflict: 0 })
       return 0
     }
     const pairs = await Promise.all(relevantFeatures.map(async ({ feature }) => ({
       feature,
       contradictionProbability: await contradictionProbability(constraint, feature),
     })))
-    pairs.forEach(({ feature, contradictionProbability: probability }) => console.log('NLI conflict pair:', {
-      constraint,
-      descriptionFeature: feature,
-      contradictionProbability: probability,
-    }))
     const constraintConflict = Math.max(0, ...pairs.map(({ contradictionProbability: probability }) => probability))
-    console.log('NLI constraint-level conflict:', { constraint, constraintConflict })
     return constraintConflict
   }))
   const conflictPenalty = clamp(conflicts.reduce((sum, score) => sum + score, 0) / conflicts.length)
-  console.log('NLI overall conflict penalty:', { conflictPenalty })
   return conflictPenalty
 }
 
