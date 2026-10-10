@@ -9,11 +9,63 @@ import api from '../services/api'
 import JobPostDetails from '../components/jobs/JobPostDetails'
 import CandidateProfileDetails from '../components/profiles/CandidateProfileDetails'
 import Connections from '../components/connections/Connections'
+import VoiceInputButton from '../components/forms/VoiceInputButton'
 
 const navItems = [{ id: 'create', icon: FiPlus }, { id: 'posts', icon: FiClipboard }, { id: 'recommendations', icon: FiUsers }, { id: 'connections', icon: FiUsers }]
 const fields = [['name', true], ['email'], ['phone', true], ['company', true], ['title', true], ['category', true], ['type', true], ['location', true], ['address'], ['description', true], ['experience'], ['salary'], ['benefits'], ['qualifications', true]]
 const valueName = (key) => ({ company: 'companyName', title: 'jobTitle', type: 'jobType' }[key] || key)
-function Form({ jobPost, loading, onSaved }) { const { t, i18n } = useTranslation(); const formRef = useRef(null); const categories = t('hireTalents.categories', { returnObjects: true }); const jobTypes = t('hireTalents.jobTypes', { returnObjects: true }); const [saving, setSaving] = useState(false); const [saved, setSaved] = useState(false); const [error, setError] = useState(''); const markUnsaved = (event) => event.target.closest('.ht-field')?.classList.add('is-dirty'); const submit = async (e) => { e.preventDefault(); if (!e.currentTarget.reportValidity()) return; setSaving(true); try { const r = await api.post('/hire-talents/job-post', Object.fromEntries(new FormData(e.currentTarget))); onSaved(r.data.data.jobPost); formRef.current?.querySelectorAll('.is-dirty').forEach((field) => field.classList.remove('is-dirty')); setSaved(true) } catch (x) { setError(x.response?.data?.message || t('hireTalents.saveFailed')) } finally { setSaving(false) } }; if (loading) return <section className="ht-job-status">{t('hireTalents.loading')}</section>; const update = Boolean(jobPost); const input = ([key, required], index) => <label className="ht-field" key={key}><span>{t(`hireTalents.${key}`)}{required && <em> *</em>}</span>{key === 'category' ? <><input name="category" list="job-categories" required defaultValue={jobPost?.category || ''} placeholder={t('hireTalents.placeholders.category')} /><datalist id="job-categories">{categories.map((value) => <option key={value} value={value} />)}</datalist></> : key === 'type' ? <><input name="jobType" list="job-types" required defaultValue={jobPost?.jobType || ''} placeholder={t('hireTalents.placeholders.type')} /><datalist id="job-types">{jobTypes.map((value) => <option key={value} value={value} />)}</datalist></> : index > 7 ? <textarea name={valueName(key)} required={required} defaultValue={jobPost?.[valueName(key)] || ''} placeholder={t(`hireTalents.placeholders.${key}`)} /> : <input name={valueName(key)} required={required} type={key === 'email' ? 'email' : key === 'phone' ? 'tel' : 'text'} defaultValue={jobPost?.[valueName(key)] || ''} placeholder={t(`hireTalents.placeholders.${key}`)} />}</label>; return <form ref={formRef} className="ht-form" onSubmit={submit} onChange={markUnsaved}><input type="hidden" name="inputLanguage" value={i18n.language} /><div className="ht-page-title"><div><p>{t('hireTalents.workspace')}</p><h1>{t(update ? 'hireTalents.update' : 'hireTalents.create')}</h1><span>{t('hireTalents.intro')}</span></div></div><section className="ht-section"><div className="ht-section-heading"><div><h2>{t('hireTalents.contact')}</h2><p>{t('hireTalents.contactHelp')}</p></div></div><div className="ht-grid ht-grid-2">{fields.slice(0, 4).map(input)}</div></section><section className="ht-section"><div className="ht-section-heading"><div><h2>{t('hireTalents.details')}</h2><p>{t('hireTalents.detailsHelp')}</p></div></div><div className="ht-grid ht-grid-2">{fields.slice(4).map((f, i) => input(f, i + 4))}</div></section><div className="ht-submit-row"><span>{t('hireTalents.required')}</span><button className="ht-submit" disabled={saving}>{t(saving ? 'hireTalents.saving' : update ? 'hireTalents.save' : 'hireTalents.publish')}</button></div>{saved && <div className="ht-toast" role="status"><strong>{t('hireTalents.saved')}</strong><span>{t('hireTalents.savedText')}</span></div>}{error && <div className="ht-success ht-error" role="alert">{error}</div>}</form> }
+function Form({ jobPost, loading, onSaved }) {
+  const { t, i18n } = useTranslation()
+  const formRef = useRef(null)
+  const inputRefs = useRef({})
+  const categories = t('hireTalents.categories', { returnObjects: true })
+  const jobTypes = t('hireTalents.jobTypes', { returnObjects: true })
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+  const markUnsaved = (event) => event.target.closest('.ht-field')?.classList.add('is-dirty')
+  const applyVoiceInput = (name, transcript) => {
+    const input = inputRefs.current[name]
+    if (!input || !transcript) return
+    input.value = input.tagName === 'TEXTAREA' && input.value.trim() ? `${input.value.trim()} ${transcript}` : transcript
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.closest('.ht-field')?.classList.add('is-dirty')
+  }
+  const submit = async (event) => {
+    event.preventDefault()
+    if (!event.currentTarget.reportValidity()) return
+    setSaving(true); setError('')
+    try {
+      const response = await api.post('/hire-talents/job-post', Object.fromEntries(new FormData(event.currentTarget)))
+      onSaved(response.data.data.jobPost)
+      formRef.current?.querySelectorAll('.is-dirty').forEach((field) => field.classList.remove('is-dirty'))
+      setSaved(true)
+    } catch (requestError) { setError(requestError.response?.data?.message || t('hireTalents.saveFailed')) }
+    finally { setSaving(false) }
+  }
+  if (loading) return <section className="ht-job-status">{t('hireTalents.loading')}</section>
+  const update = Boolean(jobPost)
+  const input = ([key, required], index) => {
+    const name = valueName(key)
+    const setRef = (element) => { inputRefs.current[name] = element }
+    return <label className="ht-field" key={key}>
+      <span>{t(`hireTalents.${key}`)}{required && <em> *</em>}</span>
+      {key === 'category' ? <><input ref={setRef} name="category" list="job-categories" required defaultValue={jobPost?.category || ''} placeholder={t('hireTalents.placeholders.category')} /><datalist id="job-categories">{categories.map((value) => <option key={value} value={value} />)}</datalist></>
+        : key === 'type' ? <><input ref={setRef} name="jobType" list="job-types" required defaultValue={jobPost?.jobType || ''} placeholder={t('hireTalents.placeholders.type')} /><datalist id="job-types">{jobTypes.map((value) => <option key={value} value={value} />)}</datalist></>
+          : index > 7 ? <textarea ref={setRef} name={name} required={required} defaultValue={jobPost?.[name] || ''} placeholder={t(`hireTalents.placeholders.${key}`)} />
+            : <input ref={setRef} name={name} required={required} type={key === 'email' ? 'email' : key === 'phone' ? 'tel' : 'text'} defaultValue={jobPost?.[name] || ''} placeholder={t(`hireTalents.placeholders.${key}`)} />}
+      <VoiceInputButton className="ht-voice-input" onTranscript={(transcript) => applyVoiceInput(name, transcript)} />
+    </label>
+  }
+  return <form ref={formRef} className="ht-form" onSubmit={submit} onChange={markUnsaved}>
+    <input type="hidden" name="inputLanguage" value={i18n.resolvedLanguage || i18n.language} />
+    <div className="ht-page-title"><div><p>{t('hireTalents.workspace')}</p><h1>{t(update ? 'hireTalents.update' : 'hireTalents.create')}</h1><span>{t('hireTalents.intro')}</span></div></div>
+    <section className="ht-section"><div className="ht-section-heading"><div><h2>{t('hireTalents.contact')}</h2><p>{t('hireTalents.contactHelp')}</p></div></div><div className="ht-grid ht-grid-2">{fields.slice(0, 4).map(input)}</div></section>
+    <section className="ht-section"><div className="ht-section-heading"><div><h2>{t('hireTalents.details')}</h2><p>{t('hireTalents.detailsHelp')}</p></div></div><div className="ht-grid ht-grid-2">{fields.slice(4).map((field, index) => input(field, index + 4))}</div></section>
+    <div className="ht-submit-row"><span>{t('hireTalents.required')}</span><button className="ht-submit" disabled={saving}>{t(saving ? 'hireTalents.saving' : update ? 'hireTalents.save' : 'hireTalents.publish')}</button></div>
+    {saved && <div className="ht-toast" role="status"><strong>{t('hireTalents.saved')}</strong><span>{t('hireTalents.savedText')}</span></div>}{error && <div className="ht-success ht-error" role="alert">{error}</div>}
+  </form>
+}
 function View() { const { t, i18n } = useTranslation(); const [post, setPost] = useState(null); const [error, setError] = useState(''); const language = i18n.resolvedLanguage || i18n.language; useEffect(() => { api.get('/hire-talents/job-post', { params: { language } }).then((r) => setPost(r.data.data.jobPost)).catch((e) => setError(e.response?.data?.message || t('hireTalents.loadFailed'))) }, [t, language]); if (error) return <section className="ht-job-status ht-error">{error}</section>; if (!post) return <section className="ht-job-status">{t('hireTalents.loading')}</section>; return <JobPostDetails post={post} /> }
 function Candidates() {
   const { t, i18n } = useTranslation()
