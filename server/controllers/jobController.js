@@ -5,6 +5,8 @@ const { structureText } = require('../services/llmService')
 const { translateToEnglish } = require('../services/translationService')
 const { queueProfileEmbedding, profileEmbeddingSourceChanged } = require('../services/embeddingService')
 const { generateRecommendations } = require('../services/matchingService')
+const JSMatchedJobs = require('../models/JSMatchedJobs')
+const JPMatchedCandidates = require('../models/JPMatchedCandidates')
 
 async function getFindJobsAccess(req, res) {
   res.status(200).json({ status: 'success', data: { message: 'Find Jobs access granted.' } })
@@ -52,7 +54,28 @@ async function saveFindJobsProfile(req, res) {
 }
 
 async function getRecommendations(req, res) {
-  const recommendations = await generateRecommendations(req.user.id)
+  // Matching writes the same score to both the candidate and job-seeker
+  // collections. Reuse that persisted result so Find Jobs shows the matches
+  // already visible to recruiters instead of depending on a fresh vector query.
+  const record = await JSMatchedJobs.findOne({ user: req.user.id }).populate('jobs.job').lean()
+  const savedRecommendations = (record?.jobs || [])
+    .filter(({ job }) => job)
+    .map(({ job, ...scores }) => ({ job, ...scores }))
+    .sort((left, right) => right.finalScore - left.finalScore)
+  let recommendations = savedRecommendations
+  if (!recommendations.length) {
+    // Also recover older/one-sided match records written before the user-side
+    // collection was populated consistently.
+    const candidateRecords = await JPMatchedCandidates.find({ 'candidates.user': req.user.id })
+      .populate('jobPost')
+      .lean()
+    recommendations = candidateRecords.flatMap(({ jobPost, candidates }) => {
+      if (!jobPost) return []
+      const match = candidates.find(({ user }) => String(user) === String(req.user.id))
+      return match ? [{ job: jobPost, ...match }] : []
+    }).sort((left, right) => right.finalScore - left.finalScore)
+  }
+  if (!recommendations.length) recommendations = await generateRecommendations(req.user.id)
   const user = await require('../models/User').findById(req.user.id).select('fullName').lean()
   console.log(`\nUser: ${user?.fullName || req.user.id}`)
   recommendations.forEach(({ job, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => console.log(`${job.jobTitle} — final: ${finalScore.toFixed(3)}, skill: ${skillScore.toFixed(3)}, constraint: ${constraintScore.toFixed(3)}, location: ${locationScore.toFixed(3)}, conflict: ${conflictPenalty.toFixed(3)}`))
