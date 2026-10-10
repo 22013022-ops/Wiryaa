@@ -36,10 +36,19 @@ function ComingSoon({ page }) {
 function Recommendations() {
   const { t } = useTranslation(); const [items, setItems] = useState([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('')
   const [selectedJob, setSelectedJob] = useState(null)
-  const load = useCallback(async () => { setLoading(true); setError(''); try { const response = await api.get('/jobs/recommendations'); const matches = response.data.data.recommendations || []; console.table(matches.map(({ job, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => ({ job: job?.jobTitle, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }))); setItems(matches) } catch (requestError) { setError(requestError.response?.data?.message || t('findJobs.loadFailed')) } finally { setLoading(false) } }, [t])
-  useEffect(() => { load() }, [load])
+  const openingId = useRef(globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`)
+  const inFlight = useRef(null)
+  const load = useCallback(async (viewId) => {
+    if (viewId && inFlight.current?.viewId === viewId) return inFlight.current.promise
+    setLoading(true); setError('')
+    const request = api.get('/jobs/recommendations', viewId ? { params: { recommendationViewId: viewId } } : undefined)
+    const promise = request.then((response) => { const matches = response.data.data.recommendations || []; console.table(matches.map(({ job, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => ({ job: job?.jobTitle, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }))); setItems(matches) }).catch((requestError) => { setError(requestError.response?.data?.message || t('findJobs.loadFailed')) }).finally(() => { setLoading(false); if (inFlight.current?.promise === promise) inFlight.current = null })
+    if (viewId) inFlight.current = { viewId, promise }
+    return promise
+  }, [t])
+  useEffect(() => { load(openingId.current) }, [load])
   if (selectedJob) return <JobPostDetails post={selectedJob} onBack={() => setSelectedJob(null)} />
-  return <section className="fj-profile-page"><div className="fj-page-title"><div><p>{t('findJobs.workspace')}</p><h1>{t('findJobs.recommendations')}</h1><span>Personalized matches are ranked using your profile and preferences.</span></div><button className="fj-submit" type="button" onClick={load} disabled={loading}>{loading ? 'Finding matches…' : 'Refresh recommendations'}</button></div>{loading && <section className="fj-profile-status"><i className="fj-spinner fj-profile-spinner" aria-hidden="true" /> Finding job matches…</section>}{error && <section className="fj-profile-status fj-error" role="alert">{error}</section>}{!loading && !error && !items.length && <p className="fj-profile-empty">No matching jobs are available yet. Add skills to your profile and try again later.</p>}<div className="fj-recommendation-grid">{items.map(({ job }) => <button className="fj-recommendation-card" key={job._id} type="button" onClick={() => setSelectedJob(job)}><h2>{job.jobTitle}</h2><p>{job.description}</p><span>View job details →</span></button>)}</div></section>
+  return <section className="fj-profile-page"><div className="fj-page-title"><div><p>{t('findJobs.workspace')}</p><h1>{t('findJobs.recommendations')}</h1><span>Personalized matches are ranked using your profile and preferences.</span></div><button className="fj-submit" type="button" onClick={() => load()} disabled={loading}>{loading ? 'Finding matches…' : 'Refresh recommendations'}</button></div>{loading && <section className="fj-profile-status"><i className="fj-spinner fj-profile-spinner" aria-hidden="true" /> Finding job matches…</section>}{error && <section className="fj-profile-status fj-error" role="alert">{error}</section>}{!loading && !error && !items.length && <p className="fj-profile-empty">No matching jobs are available yet. Add skills to your profile and try again later.</p>}<div className="fj-recommendation-grid">{items.map(({ job }) => <button className="fj-recommendation-card" key={job._id} type="button" onClick={() => setSelectedJob(job)}><h2>{job.jobTitle}</h2><p>{job.description}</p><span>View job details →</span></button>)}</div></section>
 }
 
 function ProfileView() {

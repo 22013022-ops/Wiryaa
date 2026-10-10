@@ -5,6 +5,23 @@ const { translateToEnglish } = require('../services/translationService')
 const { queueJobPostEmbedding, jobPostEmbeddingSourceChanged } = require('../services/embeddingService')
 const JPMatchedCandidates = require('../models/JPMatchedCandidates')
 const FindJobsProfile = require('../models/FindJobsProfile')
+const User = require('../models/User')
+
+const loggedRecommendationViews = new Map()
+
+function shouldLogRecommendationScores(req) {
+  const viewId = req.query.recommendationViewId
+  if (!viewId || viewId.length > 120) return false
+  const now = Date.now()
+  for (const [key, expiresAt] of loggedRecommendationViews) {
+    if (expiresAt <= now) loggedRecommendationViews.delete(key)
+  }
+  const key = `${req.user.id}:${viewId}`
+  if (loggedRecommendationViews.has(key)) return false
+  loggedRecommendationViews.set(key, now + 30 * 60 * 1000)
+  if (loggedRecommendationViews.size > 5000) loggedRecommendationViews.delete(loggedRecommendationViews.keys().next().value)
+  return true
+}
 
 const fields = ['name', 'email', 'phone', 'companyName', 'jobTitle', 'category', 'jobType', 'location', 'address', 'description', 'experience', 'salary', 'benefits', 'qualifications']
 
@@ -57,6 +74,17 @@ async function getMatchedCandidates(req, res) {
   const profiles = await FindJobsProfile.find({ user: { $in: profileIds } }).select('user name skills previousJobs roles qualification').lean()
   const profileByUserId = new Map(profiles.map((profile) => [String(profile.user), profile]))
   const recommendations = candidates.map((candidate) => ({ ...candidate, profile: profileByUserId.get(String(candidate.user?._id)) || null }))
+  if (shouldLogRecommendationScores(req)) {
+    const employer = await User.findById(req.user.id).select('fullName').lean()
+    console.log(`[Hire Talents] Candidate recommendations for user "${employer?.fullName || req.user.id}" and job "${jobPost.jobTitle}". Scores:`, JSON.stringify(recommendations.map(({ user, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => ({
+      candidate: user?.fullName || 'Unknown candidate',
+      finalScore,
+      skillScore,
+      constraintScore,
+      locationScore,
+      conflictPenalty,
+    })), null, 2))
+  }
   res.status(200).json({ status: 'success', data: { candidates: recommendations } })
 }
 

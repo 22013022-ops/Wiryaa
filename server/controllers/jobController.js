@@ -7,6 +7,23 @@ const { queueProfileEmbedding, profileEmbeddingSourceChanged } = require('../ser
 const { generateRecommendations } = require('../services/matchingService')
 const JSMatchedJobs = require('../models/JSMatchedJobs')
 const JPMatchedCandidates = require('../models/JPMatchedCandidates')
+const User = require('../models/User')
+
+const loggedRecommendationViews = new Map()
+
+function shouldLogRecommendationScores(req) {
+  const viewId = req.query.recommendationViewId
+  if (!viewId || viewId.length > 120) return false
+  const now = Date.now()
+  for (const [key, expiresAt] of loggedRecommendationViews) {
+    if (expiresAt <= now) loggedRecommendationViews.delete(key)
+  }
+  const key = `${req.user.id}:${viewId}`
+  if (loggedRecommendationViews.has(key)) return false
+  loggedRecommendationViews.set(key, now + 30 * 60 * 1000)
+  if (loggedRecommendationViews.size > 5000) loggedRecommendationViews.delete(loggedRecommendationViews.keys().next().value)
+  return true
+}
 
 async function getFindJobsAccess(req, res) {
   res.status(200).json({ status: 'success', data: { message: 'Find Jobs access granted.' } })
@@ -76,6 +93,17 @@ async function getRecommendations(req, res) {
     }).sort((left, right) => right.finalScore - left.finalScore)
   }
   if (!recommendations.length) recommendations = await generateRecommendations(req.user.id)
+  if (shouldLogRecommendationScores(req)) {
+    const user = await User.findById(req.user.id).select('fullName').lean()
+    console.log(`[Find Jobs] Recommendations for user "${user?.fullName || req.user.id}". Scores:`, JSON.stringify(recommendations.map(({ job, finalScore, skillScore, constraintScore, locationScore, conflictPenalty }) => ({
+      job: job?.jobTitle,
+      finalScore,
+      skillScore,
+      constraintScore,
+      locationScore,
+      conflictPenalty,
+    })), null, 2))
+  }
   res.status(200).json({ status: 'success', data: { recommendations } })
 }
 
